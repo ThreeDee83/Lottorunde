@@ -78,34 +78,35 @@
           <button type="button" class="entry-mode-btn active" data-entry-mode="current" aria-pressed="true">Aktuelle Quittung</button>
           <button type="button" class="entry-mode-btn" data-entry-mode="manual" aria-pressed="false">Ältere Quittung manuell</button>
         </div>
-        <p id="entryModeHint" class="form-hint">Quittungsnummer eingeben und Daten bei Win2Day abfragen.</p>
+        <p id="entryModeHint" class="form-hint">Nur die Quittungsnummer ist verpflichtend. Die übrigen Daten werden nach Möglichkeit automatisch ergänzt.</p>
         <form id="newEntryForm">
           <div class="grid2">
             <label>Datum
-              <input type="date" id="entryDate" required />
+              <input type="date" id="entryDate" />
             </label>
             <label>Quittungsnummer
               <div class="inline-input">
                 <input type="text" id="entryReceipt" placeholder="z.B. 1234567890" required />
-                <button type="button" id="queryWin2dayBtn" class="btn btn-secondary">Gewinn abfragen</button>
+                <button type="button" id="queryWin2dayBtn" class="btn btn-secondary">Daten abrufen</button>
               </div>
             </label>
           </div>
           <div class="grid2">
             <label>Spielart
-              <select id="entryGameType" required>
-                <option value="Lotto">Lotto</option>
-                <option value="Joker">Joker</option>
-                <option value="Euromillionen">Euromillionen</option>
-              </select>
+              <input type="text" id="entryGameType" list="gameTypes" placeholder="Wird automatisch erkannt" />
             </label>
-            <label>Gewinn (€)
-              <input type="number" step="0.01" id="entryGewinn" value="0" required />
+            <label>Scheinkosten (€)
+              <input type="number" min="0" step="0.01" id="entryCost" placeholder="0,00" />
             </label>
           </div>
-          <label>Ziehungsdatum/-daten (mehrere möglich, mit Komma trennen: JJJJ-MM-TT)
-            <input type="text" id="entryDrawDates" placeholder="2026-08-05, 2026-08-08" />
-          </label>
+          <div class="grid2">
+            <label>Ziehungsdatum/-daten
+              <input type="text" id="entryDrawDates" placeholder="2026-08-05, 2026-08-08" />
+            </label>
+            <label>Gewinn (€)
+              <input type="number" min="0" step="0.01" id="entryGewinn" placeholder="0,00" />
+            </label>
+          </div>
           <p id="win2dayStatus" class="muted"></p>
           <button type="submit" class="btn btn-primary">Datensatz speichern</button>
           <p id="newEntryError" class="error"></p>
@@ -120,17 +121,21 @@
           <h2 class="section-title">Spielscheine</h2>
           <p id="entriesCount" class="section-meta" aria-live="polite"></p>
         </div>
-        <div class="table-filters" role="group" aria-label="Spielscheine nach Zeitraum filtern">
-          <button type="button" class="filter-btn active" data-entry-filter="month" aria-pressed="true">Aktueller Monat</button>
-          <button type="button" class="filter-btn" data-entry-filter="year" aria-pressed="false">Aktuelles Jahr</button>
-          <button type="button" class="filter-btn" data-entry-filter="all" aria-pressed="false">Alle Einträge</button>
+        <div class="entries-toolbar">
+          <button type="button" id="refreshEntriesBtn" class="btn btn-secondary refresh-btn">↻ Aktualisieren</button>
+          <div class="table-filters" role="group" aria-label="Spielscheine nach Zeitraum filtern">
+            <button type="button" class="filter-btn active" data-entry-filter="month" aria-pressed="true">Aktueller Monat</button>
+            <button type="button" class="filter-btn" data-entry-filter="year" aria-pressed="false">Aktuelles Jahr</button>
+            <button type="button" class="filter-btn" data-entry-filter="all" aria-pressed="false">Alle Einträge</button>
+          </div>
+          <span id="entriesRefreshStatus" class="sr-only" aria-live="polite"></span>
         </div>
       </div>
       <div class="table-wrap entries-table-wrap">
         <table class="entries-table">
           <thead>
             <tr>
-              <th>Datum</th><th>Quittungsnr.</th><th>Spielart</th><th>Ziehungsdatum</th><th>Gewinn</th><th id="entriesActionsHeader" class="hidden"><span class="sr-only">Aktionen</span></th>
+              <th>Datum</th><th>Quittungsnr.</th><th>Spielart</th><th>Ziehungsdatum</th><th>Kosten</th><th>Gewinn</th><th id="entriesActionsHeader" class="hidden"><span class="sr-only">Aktionen</span></th>
             </tr>
           </thead>
           <tbody id="entriesTableBody"></tbody>
@@ -164,6 +169,52 @@
     </div>
   </div>
 </div>
+
+<!-- EDIT MODAL (nur Admin) -->
+<div id="editEntryModal" class="modal-overlay hidden">
+  <div class="modal modal-compact" role="dialog" aria-modal="true" aria-labelledby="editEntryTitle">
+    <div class="modal-header">
+      <h2 id="editEntryTitle">Spielschein bearbeiten</h2>
+      <button id="closeEditEntryBtn" type="button" class="btn btn-ghost" aria-label="Bearbeiten schließen">✕</button>
+    </div>
+    <form id="editEntryForm">
+      <input type="hidden" id="editEntryId" />
+      <label>Quittungsnummer
+        <div class="inline-input">
+          <input type="text" id="editEntryReceipt" required />
+          <button type="button" id="editQueryWin2dayBtn" class="btn btn-secondary">Daten abrufen</button>
+        </div>
+      </label>
+      <div class="grid2">
+        <label>Datum<input type="date" id="editEntryDate" /></label>
+        <label>Spielart<input type="text" id="editEntryGameType" list="gameTypes" /></label>
+      </div>
+      <div class="grid2">
+        <label>Scheinkosten (€)<input type="number" min="0" step="0.01" id="editEntryCost" /></label>
+        <label>Gewinn (€)<input type="number" min="0" step="0.01" id="editEntryGewinn" /></label>
+      </div>
+      <label>Ziehungsdatum/-daten
+        <input type="text" id="editEntryDrawDates" placeholder="2026-08-05, 2026-08-08" />
+      </label>
+      <p id="editEntryStatus" class="muted" aria-live="polite"></p>
+      <div class="modal-actions">
+        <button type="button" id="cancelEditEntryBtn" class="btn btn-ghost">Abbrechen</button>
+        <button type="submit" id="saveEditEntryBtn" class="btn btn-primary">Änderungen speichern</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<datalist id="gameTypes">
+  <option value="Lotto 6 aus 45"></option>
+  <option value="EuroMillionen"></option>
+  <option value="Joker"></option>
+  <option value="EuroDreams"></option>
+  <option value="LottoPlus"></option>
+  <option value="Toto"></option>
+  <option value="Bingo"></option>
+  <option value="Zahlenlotto"></option>
+</datalist>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>

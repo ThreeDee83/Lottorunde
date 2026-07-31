@@ -280,12 +280,15 @@ tr:last-child td { border-bottom: none; }
 tbody tr { transition: background .1s ease; }
 tbody tr:hover { background: var(--surface-2); }
 td.mono, .mono { font-family: var(--font-mono); }
-.entries-table th:nth-child(5), .entries-table td:nth-child(5) { text-align: right; }
+.entries-table th:nth-child(5), .entries-table td:nth-child(5),
+.entries-table th:nth-child(6), .entries-table td:nth-child(6) { text-align: right; }
 .entries-table th:last-child, .entries-table td:last-child { width: 1%; white-space: nowrap; }
 .entry-actions { text-align: right; }
+.action-group { display: flex; justify-content: flex-end; gap: 6px; }
 .empty-row td { color: var(--muted); text-align: center !important; padding: 32px 16px; }
 .amount-positive { color: var(--green); font-weight: 600; }
 .amount-negative { color: var(--red); }
+.ticket-cost { color: var(--gold-bright); }
 
 .section-heading {
   display: flex;
@@ -303,6 +306,8 @@ td.mono, .mono { font-family: var(--font-mono); }
   border-radius: 12px;
   background: var(--surface);
 }
+.entries-toolbar { display: flex; align-items: center; gap: 8px; }
+.refresh-btn { min-height: 46px; white-space: nowrap; }
 
 /* ============================================================
    MODAL
@@ -321,6 +326,8 @@ td.mono, .mono { font-family: var(--font-mono); }
 .modal-header { display: flex; justify-content: space-between; align-items: center; }
 .modal-header h2 { font-family: var(--font-display); margin: 0; }
 .modal h3 { font-family: var(--font-display); margin-top: 30px; margin-bottom: 6px; }
+.modal-compact { max-width: 680px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
 
 /* ============================================================
    RESPONSIVE — TABLETS < 7 ZOLL (ca. bis 768px, Hochformat)
@@ -333,6 +340,7 @@ td.mono, .mono { font-family: var(--font-mono); }
   .balance-amount { font-size: 42px; }
   .modal { padding: 22px; border-radius: var(--radius-md); }
   .section-heading { align-items: stretch; flex-direction: column; gap: 12px; }
+  .entries-toolbar { align-items: stretch; flex-wrap: wrap; }
   .table-filters { width: max-content; max-width: 100%; overflow-x: auto; }
 
   /* Menü-Button (Hamburger) einblenden */
@@ -399,6 +407,10 @@ td.mono, .mono { font-family: var(--font-mono); }
   .table-filters { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
   .table-filters .filter-btn { min-height: 44px; }
   .table-filters .filter-btn:last-child { grid-column: 1 / -1; }
+  .entries-toolbar { display: grid; grid-template-columns: 1fr; }
+  .refresh-btn { width: 100%; }
+  .modal-actions { flex-direction: column-reverse; }
+  .modal-actions .btn { width: 100%; }
 
   /* Tabellen werden zu gut lesbaren Karten. */
   .table-wrap { border: none; background: none; box-shadow: none; overflow-x: visible; }
@@ -437,7 +449,7 @@ td.mono, .mono { font-family: var(--font-mono); }
   td .inline-input { justify-content: flex-end; flex: 1; }
   td select, td input { max-width: 150px; }
   .entries-table td:last-child { width: 100%; white-space: normal; }
-  .entries-table td:nth-child(5) { text-align: right; }
+  .entries-table td:nth-child(5), .entries-table td:nth-child(6) { text-align: right; }
   .entries-table .entry-actions { justify-content: flex-end; }
   .entries-table .entry-actions .btn { width: auto; min-height: 42px; font-size: 14px; }
   .empty-row td { display: block; text-align: center !important; }
@@ -457,7 +469,8 @@ td.mono, .mono { font-family: var(--font-mono); }
   td::before { font-size: 10px; }
   td .inline-input { width: 100%; justify-content: flex-start; }
   td select, td input { max-width: none; width: 100%; }
-  .entries-table td:nth-child(5) { text-align: left; }
+  .entries-table td:nth-child(5), .entries-table td:nth-child(6) { text-align: left; }
   .entries-table .entry-actions { align-items: stretch; }
+  .entries-table .entry-actions .action-group { width: 100%; flex-direction: column; }
   .entries-table .entry-actions .btn { width: 100%; }
 }

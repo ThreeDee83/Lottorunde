@@ -3,6 +3,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 let currentProfile = null; // { id, name, role, balance }
 let allEntries = [];
 let activeEntryFilter = "month";
+let receiptLookupTimer = null;
 
 // ---------- Helpers ----------
 const fmtMoney = (n) =>
@@ -16,6 +17,19 @@ function hide(el) { el.classList.add("hidden"); }
 function formatDate(dateString) {
   if (!dateString) return "-";
   return new Intl.DateTimeFormat("de-AT").format(new Date(`${dateString}T00:00:00`));
+}
+
+function todayIso() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset();
+  return new Date(now.getTime() - offset * 60_000).toISOString().slice(0, 10);
+}
+
+function parseDrawDates(value) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 // ---------- Auth ----------
@@ -69,7 +83,7 @@ async function bootstrapApp() {
     show($("adminOverviewSection"));
     show($("newEntrySection"));
     show($("entriesActionsHeader"));
-    $("entryDate").valueAsDate = new Date();
+    $("entryDate").value = todayIso();
     await loadOverview();
   } else {
     show($("userBalanceSection"));
@@ -156,7 +170,7 @@ function renderEntries() {
     const tr = document.createElement("tr");
     tr.className = "empty-row";
     const td = document.createElement("td");
-    td.colSpan = currentProfile.role === "admin" ? 6 : 5;
+    td.colSpan = currentProfile.role === "admin" ? 7 : 6;
     td.textContent = "Für diesen Zeitraum sind keine Spielscheine vorhanden.";
     tr.appendChild(td);
     body.appendChild(tr);
@@ -171,6 +185,7 @@ function renderEntries() {
       <td data-label="Quittungsnr." class="mono">${e.receipt_number}</td>
       <td data-label="Spielart">${e.game_type}</td>
       <td data-label="Ziehungsdatum">${draws || "-"}</td>
+      <td data-label="Kosten" class="mono ticket-cost">${fmtMoney(e.cost)}</td>
       <td data-label="Gewinn" class="mono ${e.gewinn > 0 ? "amount-positive" : ""}">${fmtMoney(e.gewinn)}</td>
     `;
 
@@ -178,14 +193,46 @@ function renderEntries() {
       const actionCell = document.createElement("td");
       actionCell.className = "entry-actions";
       actionCell.dataset.label = "Aktionen";
-      actionCell.innerHTML = `<button type="button" class="btn btn-danger btn-small" data-delete-entry="${e.id}">Löschen</button>`;
-      actionCell.querySelector("button").addEventListener("click", (event) => deleteEntry(e, event.currentTarget));
+      actionCell.innerHTML = `
+        <div class="action-group">
+          <button type="button" class="btn btn-secondary btn-small" data-edit-entry="${e.id}">Bearbeiten</button>
+          <button type="button" class="btn btn-danger btn-small" data-delete-entry="${e.id}">Löschen</button>
+        </div>
+      `;
+      actionCell.querySelector("[data-edit-entry]").addEventListener("click", () => openEditEntry(e));
+      actionCell.querySelector("[data-delete-entry]").addEventListener("click", (event) => deleteEntry(e, event.currentTarget));
       tr.appendChild(actionCell);
     }
 
     body.appendChild(tr);
   });
 }
+
+$("refreshEntriesBtn").addEventListener("click", async () => {
+  const button = $("refreshEntriesBtn");
+  button.disabled = true;
+  button.textContent = "↻ Wird aktualisiert …";
+  $("entriesRefreshStatus").textContent = "Daten werden aktualisiert.";
+
+  if (currentProfile.role === "admin") {
+    await loadOverview();
+  } else {
+    const { data: profile } = await supabaseClient
+      .from("profiles")
+      .select("balance")
+      .eq("id", currentProfile.id)
+      .single();
+    if (profile) {
+      currentProfile.balance = profile.balance;
+      $("userBalanceAmount").textContent = fmtMoney(profile.balance);
+    }
+  }
+
+  await loadEntries();
+  button.disabled = false;
+  button.textContent = "↻ Aktualisieren";
+  $("entriesRefreshStatus").textContent = "Tabelle und Kontostände wurden aktualisiert.";
+});
 
 document.querySelectorAll("[data-entry-filter]").forEach((button) => {
   button.addEventListener("click", () => {
@@ -202,7 +249,7 @@ document.querySelectorAll("[data-entry-filter]").forEach((button) => {
 async function deleteEntry(entry, button) {
   const confirmed = confirm(
     `Spielschein ${entry.receipt_number} vom ${formatDate(entry.entry_date)} wirklich löschen?` +
-    (Number(entry.gewinn) > 0 ? " Der gutgeschriebene Gewinn wird von den Kontoständen zurückgerechnet." : "")
+    " Verrechnete Kosten und Gewinne werden in den Kontoständen zurückgerechnet."
   );
   if (!confirmed) return;
 
@@ -221,11 +268,11 @@ async function deleteEntry(entry, button) {
 }
 
 // ---------- Admin: Win2Day Abfrage ----------
-$("queryWin2dayBtn").addEventListener("click", async () => {
-  const receipt = $("entryReceipt").value.trim();
-  const statusEl = $("win2dayStatus");
+async function queryReceiptData(fields, button, statusEl) {
+  const receipt = $(fields.receipt).value.trim();
   if (!receipt) { statusEl.textContent = "Bitte zuerst eine Quittungsnummer eingeben."; return; }
-  statusEl.textContent = "Frage bei Win2Day ab …";
+  statusEl.textContent = "Lese Spielschein-Daten aus …";
+  button.disabled = true;
 
   try {
     const { data, error } = await supabaseClient.functions.invoke("win2day-query", {
@@ -233,20 +280,49 @@ $("queryWin2dayBtn").addEventListener("click", async () => {
     });
     if (error) throw error;
     if (data.error) { statusEl.textContent = data.error; return; }
+    if ($(fields.receipt).value.trim() !== receipt) return;
 
-    if (data.gameType) $("entryGameType").value = data.gameType;
-    if (typeof data.gewinn === "number") $("entryGewinn").value = data.gewinn;
-    if (data.drawDates && data.drawDates.length) $("entryDrawDates").value = data.drawDates.join(", ");
+    if (data.gameType) $(fields.gameType).value = data.gameType;
+    if (typeof data.cost === "number") $(fields.cost).value = data.cost;
+    if (typeof data.gewinn === "number") $(fields.gewinn).value = data.gewinn;
+    if (data.drawDates && data.drawDates.length) $(fields.drawDates).value = data.drawDates.join(", ");
 
     statusEl.textContent = data.note || "Daten übernommen – bitte prüfen.";
   } catch (err) {
     statusEl.textContent = "Automatische Abfrage nicht möglich. Bitte Daten manuell eintragen.";
+  } finally {
+    button.disabled = false;
   }
+}
+
+const newEntryFields = {
+  receipt: "entryReceipt",
+  gameType: "entryGameType",
+  cost: "entryCost",
+  gewinn: "entryGewinn",
+  drawDates: "entryDrawDates",
+};
+
+$("queryWin2dayBtn").addEventListener("click", () => {
+  clearTimeout(receiptLookupTimer);
+  queryReceiptData(newEntryFields, $("queryWin2dayBtn"), $("win2dayStatus"));
+});
+
+$("entryReceipt").addEventListener("input", () => {
+  clearTimeout(receiptLookupTimer);
+  if ($("queryWin2dayBtn").classList.contains("hidden")) return;
+  if ($("entryReceipt").value.replace(/\s+/g, "").length < 6) return;
+  receiptLookupTimer = setTimeout(() => {
+    if (!$("queryWin2dayBtn").classList.contains("hidden")) {
+      queryReceiptData(newEntryFields, $("queryWin2dayBtn"), $("win2dayStatus"));
+    }
+  }, 900);
 });
 
 document.querySelectorAll("[data-entry-mode]").forEach((button) => {
   button.addEventListener("click", () => {
     const isManual = button.dataset.entryMode === "manual";
+    if (isManual) clearTimeout(receiptLookupTimer);
     document.querySelectorAll("[data-entry-mode]").forEach((item) => {
       const selected = item === button;
       item.classList.toggle("active", selected);
@@ -254,8 +330,8 @@ document.querySelectorAll("[data-entry-mode]").forEach((button) => {
     });
     $("queryWin2dayBtn").classList.toggle("hidden", isManual);
     $("entryModeHint").textContent = isManual
-      ? "Datum, ältere Quittungsnummer und Ziehungsdaten vollständig manuell eintragen."
-      : "Quittungsnummer eingeben und Daten bei Win2Day abfragen.";
+      ? "Ältere Quittungsnummer und vorhandene Daten manuell eintragen. Nur die Quittungsnummer ist verpflichtend."
+      : "Nur die Quittungsnummer ist verpflichtend. Die übrigen Daten werden nach Möglichkeit automatisch ergänzt.";
     $("entryDate").focus();
   });
 });
@@ -265,16 +341,14 @@ $("newEntryForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   $("newEntryError").textContent = "";
 
-  const drawDatesRaw = $("entryDrawDates").value.trim();
-  const drawDates = drawDatesRaw
-    ? drawDatesRaw.split(",").map((s) => s.trim()).filter(Boolean)
-    : [];
+  const drawDates = parseDrawDates($("entryDrawDates").value);
 
   const payload = {
-    entry_date: $("entryDate").value,
+    entry_date: $("entryDate").value || todayIso(),
     receipt_number: $("entryReceipt").value.trim(),
-    game_type: $("entryGameType").value,
+    game_type: $("entryGameType").value.trim() || "Unbekannt",
     draw_dates: drawDates,
+    cost: parseFloat($("entryCost").value) || 0,
     gewinn: parseFloat($("entryGewinn").value) || 0,
     created_by: currentProfile.id,
   };
@@ -286,8 +360,70 @@ $("newEntryForm").addEventListener("submit", async (e) => {
   }
 
   $("newEntryForm").reset();
-  $("entryDate").valueAsDate = new Date();
+  $("entryDate").value = todayIso();
   $("win2dayStatus").textContent = "";
+  await loadEntries();
+  await loadOverview();
+});
+
+// ---------- Admin: Spielschein bearbeiten ----------
+function openEditEntry(entry) {
+  $("editEntryId").value = entry.id;
+  $("editEntryReceipt").value = entry.receipt_number;
+  $("editEntryDate").value = entry.entry_date || "";
+  $("editEntryGameType").value = entry.game_type || "";
+  $("editEntryCost").value = Number(entry.cost || 0);
+  $("editEntryGewinn").value = Number(entry.gewinn || 0);
+  $("editEntryDrawDates").value = (entry.draw_dates || []).join(", ");
+  $("editEntryStatus").textContent = "Änderungen an Kosten oder Gewinn werden automatisch neu aufgeteilt.";
+  show($("editEntryModal"));
+  $("editEntryReceipt").focus();
+}
+
+function closeEditEntry() {
+  hide($("editEntryModal"));
+  $("editEntryForm").reset();
+}
+
+$("closeEditEntryBtn").addEventListener("click", closeEditEntry);
+$("cancelEditEntryBtn").addEventListener("click", closeEditEntry);
+$("editQueryWin2dayBtn").addEventListener("click", () => {
+  queryReceiptData({
+    receipt: "editEntryReceipt",
+    gameType: "editEntryGameType",
+    cost: "editEntryCost",
+    gewinn: "editEntryGewinn",
+    drawDates: "editEntryDrawDates",
+  }, $("editQueryWin2dayBtn"), $("editEntryStatus"));
+});
+
+$("editEntryForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const submitButton = $("saveEditEntryBtn");
+  submitButton.disabled = true;
+  $("editEntryStatus").textContent = "Änderungen werden gespeichert …";
+
+  const payload = {
+    entry_date: $("editEntryDate").value || todayIso(),
+    receipt_number: $("editEntryReceipt").value.trim(),
+    game_type: $("editEntryGameType").value.trim() || "Unbekannt",
+    draw_dates: parseDrawDates($("editEntryDrawDates").value),
+    cost: parseFloat($("editEntryCost").value) || 0,
+    gewinn: parseFloat($("editEntryGewinn").value) || 0,
+  };
+
+  const { error } = await supabaseClient
+    .from("entries")
+    .update(payload)
+    .eq("id", $("editEntryId").value);
+
+  submitButton.disabled = false;
+  if (error) {
+    $("editEntryStatus").textContent = "Fehler: " + error.message;
+    return;
+  }
+
+  closeEditEntry();
   await loadEntries();
   await loadOverview();
 });
