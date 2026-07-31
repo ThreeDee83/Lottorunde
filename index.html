@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Spielgemeinschaft</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -33,7 +33,7 @@
 <div id="appScreen" class="screen hidden">
   <header class="topbar">
     <div class="brand">
-      <span class="brand-mark">●</span>
+      <span class="brand-mark" aria-hidden="true">S</span>
       <span>Spielgemeinschaft</span>
     </div>
     <button id="menuToggleBtn" class="menu-toggle" aria-label="Menü öffnen">
@@ -74,6 +74,11 @@
     <section id="newEntrySection" class="hidden">
       <h2 class="section-title">Neuen Spielschein erfassen</h2>
       <div class="ticket">
+        <div class="entry-mode" role="group" aria-label="Art der Erfassung">
+          <button type="button" class="entry-mode-btn active" data-entry-mode="current" aria-pressed="true">Aktuelle Quittung</button>
+          <button type="button" class="entry-mode-btn" data-entry-mode="manual" aria-pressed="false">Ältere Quittung manuell</button>
+        </div>
+        <p id="entryModeHint" class="form-hint">Quittungsnummer eingeben und Daten bei Win2Day abfragen.</p>
         <form id="newEntryForm">
           <div class="grid2">
             <label>Datum
@@ -109,13 +114,23 @@
     </section>
 
     <!-- Eintragsliste (für alle sichtbar) -->
-    <section>
-      <h2 class="section-title">Spielscheine</h2>
-      <div class="table-wrap">
-        <table>
+    <section class="entries-section">
+      <div class="section-heading">
+        <div>
+          <h2 class="section-title">Spielscheine</h2>
+          <p id="entriesCount" class="section-meta" aria-live="polite"></p>
+        </div>
+        <div class="table-filters" role="group" aria-label="Spielscheine nach Zeitraum filtern">
+          <button type="button" class="filter-btn active" data-entry-filter="month" aria-pressed="true">Aktueller Monat</button>
+          <button type="button" class="filter-btn" data-entry-filter="year" aria-pressed="false">Aktuelles Jahr</button>
+          <button type="button" class="filter-btn" data-entry-filter="all" aria-pressed="false">Alle Einträge</button>
+        </div>
+      </div>
+      <div class="table-wrap entries-table-wrap">
+        <table class="entries-table">
           <thead>
             <tr>
-              <th>Datum</th><th>Quittungsnr.</th><th>Spielart</th><th>Ziehungsdatum</th><th>Gewinn</th>
+              <th>Datum</th><th>Quittungsnr.</th><th>Spielart</th><th>Ziehungsdatum</th><th>Gewinn</th><th id="entriesActionsHeader" class="hidden"><span class="sr-only">Aktionen</span></th>
             </tr>
           </thead>
           <tbody id="entriesTableBody"></tbody>

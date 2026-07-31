@@ -1,6 +1,8 @@
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let currentProfile = null; // { id, name, role, balance }
+let allEntries = [];
+let activeEntryFilter = "month";
 
 // ---------- Helpers ----------
 const fmtMoney = (n) =>
@@ -10,6 +12,11 @@ const $ = (id) => document.getElementById(id);
 
 function show(el) { el.classList.remove("hidden"); }
 function hide(el) { el.classList.add("hidden"); }
+
+function formatDate(dateString) {
+  if (!dateString) return "-";
+  return new Intl.DateTimeFormat("de-AT").format(new Date(`${dateString}T00:00:00`));
+}
 
 // ---------- Auth ----------
 $("loginForm").addEventListener("submit", async (e) => {
@@ -61,6 +68,7 @@ async function bootstrapApp() {
     show($("settingsBtn"));
     show($("adminOverviewSection"));
     show($("newEntrySection"));
+    show($("entriesActionsHeader"));
     $("entryDate").valueAsDate = new Date();
     await loadOverview();
   } else {
@@ -118,22 +126,98 @@ async function loadEntries() {
     .select("*")
     .order("entry_date", { ascending: false });
 
-  if (error) return;
+  if (error) {
+    $("entriesCount").textContent = "Einträge konnten nicht geladen werden.";
+    return;
+  }
+
+  allEntries = entries || [];
+  renderEntries();
+}
+
+function isEntryInActivePeriod(entry) {
+  if (activeEntryFilter === "all") return true;
+
+  const today = new Date();
+  const [year, month] = entry.entry_date.split("-").map(Number);
+  if (activeEntryFilter === "year") return year === today.getFullYear();
+  return year === today.getFullYear() && month === today.getMonth() + 1;
+}
+
+function renderEntries() {
+  const entries = allEntries.filter(isEntryInActivePeriod);
 
   const body = $("entriesTableBody");
   body.innerHTML = "";
+
+  $("entriesCount").textContent = `${entries.length} ${entries.length === 1 ? "Eintrag" : "Einträge"}`;
+
+  if (!entries.length) {
+    const tr = document.createElement("tr");
+    tr.className = "empty-row";
+    const td = document.createElement("td");
+    td.colSpan = currentProfile.role === "admin" ? 6 : 5;
+    td.textContent = "Für diesen Zeitraum sind keine Spielscheine vorhanden.";
+    tr.appendChild(td);
+    body.appendChild(tr);
+    return;
+  }
+
   entries.forEach((e) => {
     const tr = document.createElement("tr");
-    const draws = (e.draw_dates || []).map((d) => new Date(d).toLocaleDateString("de-AT")).join(", ");
+    const draws = (e.draw_dates || []).map(formatDate).join(", ");
     tr.innerHTML = `
-      <td data-label="Datum">${new Date(e.entry_date).toLocaleDateString("de-AT")}</td>
+      <td data-label="Datum">${formatDate(e.entry_date)}</td>
       <td data-label="Quittungsnr." class="mono">${e.receipt_number}</td>
       <td data-label="Spielart">${e.game_type}</td>
       <td data-label="Ziehungsdatum">${draws || "-"}</td>
       <td data-label="Gewinn" class="mono ${e.gewinn > 0 ? "amount-positive" : ""}">${fmtMoney(e.gewinn)}</td>
     `;
+
+    if (currentProfile.role === "admin") {
+      const actionCell = document.createElement("td");
+      actionCell.className = "entry-actions";
+      actionCell.dataset.label = "Aktionen";
+      actionCell.innerHTML = `<button type="button" class="btn btn-danger btn-small" data-delete-entry="${e.id}">Löschen</button>`;
+      actionCell.querySelector("button").addEventListener("click", (event) => deleteEntry(e, event.currentTarget));
+      tr.appendChild(actionCell);
+    }
+
     body.appendChild(tr);
   });
+}
+
+document.querySelectorAll("[data-entry-filter]").forEach((button) => {
+  button.addEventListener("click", () => {
+    activeEntryFilter = button.dataset.entryFilter;
+    document.querySelectorAll("[data-entry-filter]").forEach((item) => {
+      const selected = item === button;
+      item.classList.toggle("active", selected);
+      item.setAttribute("aria-pressed", String(selected));
+    });
+    renderEntries();
+  });
+});
+
+async function deleteEntry(entry, button) {
+  const confirmed = confirm(
+    `Spielschein ${entry.receipt_number} vom ${formatDate(entry.entry_date)} wirklich löschen?` +
+    (Number(entry.gewinn) > 0 ? " Der gutgeschriebene Gewinn wird von den Kontoständen zurückgerechnet." : "")
+  );
+  if (!confirmed) return;
+
+  button.disabled = true;
+  button.textContent = "Lösche …";
+  const { error } = await supabaseClient.rpc("admin_delete_entry", { target_entry_id: entry.id });
+  if (error) {
+    button.disabled = false;
+    button.textContent = "Löschen";
+    alert("Fehler beim Löschen: " + error.message);
+    return;
+  }
+
+  await loadEntries();
+  await loadOverview();
 }
 
 // ---------- Admin: Win2Day Abfrage ----------
@@ -158,6 +242,22 @@ $("queryWin2dayBtn").addEventListener("click", async () => {
   } catch (err) {
     statusEl.textContent = "Automatische Abfrage nicht möglich. Bitte Daten manuell eintragen.";
   }
+});
+
+document.querySelectorAll("[data-entry-mode]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const isManual = button.dataset.entryMode === "manual";
+    document.querySelectorAll("[data-entry-mode]").forEach((item) => {
+      const selected = item === button;
+      item.classList.toggle("active", selected);
+      item.setAttribute("aria-pressed", String(selected));
+    });
+    $("queryWin2dayBtn").classList.toggle("hidden", isManual);
+    $("entryModeHint").textContent = isManual
+      ? "Datum, ältere Quittungsnummer und Ziehungsdaten vollständig manuell eintragen."
+      : "Quittungsnummer eingeben und Daten bei Win2Day abfragen.";
+    $("entryDate").focus();
+  });
 });
 
 // ---------- Admin: Neuer Datensatz ----------
