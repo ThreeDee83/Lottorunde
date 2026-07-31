@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Spielgemeinschaft</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen" class="screen">
+  <div class="ticket login-ticket">
+    <div class="ticket-eyebrow">Spielgemeinschaft</div>
+    <h1>Anmeldung</h1>
+    <p class="muted">Melde dich mit deinen Zugangsdaten an.</p>
+    <form id="loginForm">
+      <label>E-Mail
+        <input type="email" id="loginEmail" required autocomplete="username" />
+      </label>
+      <label>Passwort
+        <input type="password" id="loginPassword" required autocomplete="current-password" />
+      </label>
+      <button type="submit" class="btn btn-primary">Anmelden</button>
+      <p id="loginError" class="error"></p>
+    </form>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="appScreen" class="screen hidden">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">●</span>
+      <span>Spielgemeinschaft</span>
+    </div>
+    <div class="topbar-right">
+      <span id="whoami" class="muted"></span>
+      <button id="settingsBtn" class="btn btn-ghost hidden">Einstellungen</button>
+      <button id="logoutBtn" class="btn btn-ghost">Abmelden</button>
+    </div>
+  </header>
+
+  <main class="content">
+
+    <!-- USER: eigener Kontostand -->
+    <section id="userBalanceSection" class="hidden">
+      <h2 class="section-title">Mein Kontostand</h2>
+      <div class="ticket balance-ticket">
+        <div class="balance-amount" id="userBalanceAmount">0,00 €</div>
+        <div class="ticket-eyebrow">Aktueller Stand</div>
+      </div>
+    </section>
+
+    <!-- ADMIN: Übersicht aller Kontostände -->
+    <section id="adminOverviewSection" class="hidden">
+      <h2 class="section-title">Kontostände &amp; Einzahlungen</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Name</th><th>Rolle</th><th>Kontostand</th><th></th></tr>
+          </thead>
+          <tbody id="overviewTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ADMIN: Neuer Datensatz -->
+    <section id="newEntrySection" class="hidden">
+      <h2 class="section-title">Neuen Spielschein erfassen</h2>
+      <div class="ticket">
+        <form id="newEntryForm">
+          <div class="grid2">
+            <label>Datum
+              <input type="date" id="entryDate" required />
+            </label>
+            <label>Quittungsnummer
+              <div class="inline-input">
+                <input type="text" id="entryReceipt" placeholder="z.B. 1234567890" required />
+                <button type="button" id="queryWin2dayBtn" class="btn btn-secondary">Gewinn abfragen</button>
+              </div>
+            </label>
+          </div>
+          <div class="grid2">
+            <label>Spielart
+              <select id="entryGameType" required>
+                <option value="Lotto">Lotto</option>
+                <option value="Joker">Joker</option>
+                <option value="Euromillionen">Euromillionen</option>
+              </select>
+            </label>
+            <label>Gewinn (€)
+              <input type="number" step="0.01" id="entryGewinn" value="0" required />
+            </label>
+          </div>
+          <label>Ziehungsdatum/-daten (mehrere möglich, mit Komma trennen: JJJJ-MM-TT)
+            <input type="text" id="entryDrawDates" placeholder="2026-08-05, 2026-08-08" />
+          </label>
+          <p id="win2dayStatus" class="muted"></p>
+          <button type="submit" class="btn btn-primary">Datensatz speichern</button>
+          <p id="newEntryError" class="error"></p>
+        </form>
+      </div>
+    </section>
+
+    <!-- Eintragsliste (für alle sichtbar) -->
+    <section>
+      <h2 class="section-title">Spielscheine</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Datum</th><th>Quittungsnr.</th><th>Spielart</th><th>Ziehungsdatum</th><th>Gewinn</th>
+            </tr>
+          </thead>
+          <tbody id="entriesTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- SETTINGS MODAL (nur Admin) -->
+<div id="settingsModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Einstellungen</h2>
+      <button id="closeSettingsBtn" class="btn btn-ghost">✕</button>
+    </div>
+
+    <p class="muted">
+      Neue Spieler werden ausschließlich direkt in Supabase angelegt
+      (Authentication → Users → Add user). Hier kannst du Rolle und
+      Kontostand verwalten sowie Spieler aktivieren oder deaktivieren.
+      Deaktivierte Spieler können sich nicht mehr anmelden bzw. sehen keine Daten mehr.
+    </p>
+    <h3>Spieler &amp; Rollen</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Rolle</th><th>Kontostand korrigieren</th><th>Status</th></tr></thead>
+        <tbody id="settingsPlayersBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
