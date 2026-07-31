@@ -319,22 +319,45 @@ $("entryReceipt").addEventListener("input", () => {
   }, 900);
 });
 
+function setEntryMode(mode) {
+  const isManual = mode === "manual";
+  if (isManual) clearTimeout(receiptLookupTimer);
+  document.querySelectorAll("[data-entry-mode]").forEach((item) => {
+    const selected = item.dataset.entryMode === mode;
+    item.classList.toggle("active", selected);
+    item.setAttribute("aria-pressed", String(selected));
+  });
+  $("queryWin2dayBtn").classList.toggle("hidden", isManual);
+  $("entryModeHint").textContent = isManual
+    ? "Daten des alten Scheins manuell eintragen. Nur die Quittungsnummer ist verpflichtend."
+    : "Nur die Quittungsnummer ist verpflichtend. Die übrigen Daten werden nach Möglichkeit automatisch ergänzt.";
+}
+
 document.querySelectorAll("[data-entry-mode]").forEach((button) => {
   button.addEventListener("click", () => {
-    const isManual = button.dataset.entryMode === "manual";
-    if (isManual) clearTimeout(receiptLookupTimer);
-    document.querySelectorAll("[data-entry-mode]").forEach((item) => {
-      const selected = item === button;
-      item.classList.toggle("active", selected);
-      item.setAttribute("aria-pressed", String(selected));
-    });
-    $("queryWin2dayBtn").classList.toggle("hidden", isManual);
-    $("entryModeHint").textContent = isManual
-      ? "Ältere Quittungsnummer und vorhandene Daten manuell eintragen. Nur die Quittungsnummer ist verpflichtend."
-      : "Nur die Quittungsnummer ist verpflichtend. Die übrigen Daten werden nach Möglichkeit automatisch ergänzt.";
+    setEntryMode(button.dataset.entryMode);
     $("entryDate").focus();
   });
 });
+
+function openNewEntry() {
+  $("newEntryForm").reset();
+  $("entryDate").value = todayIso();
+  $("win2dayStatus").textContent = "";
+  $("newEntryError").textContent = "";
+  setEntryMode("current");
+  show($("newEntryModal"));
+  $("entryReceipt").focus();
+}
+
+function closeNewEntry() {
+  clearTimeout(receiptLookupTimer);
+  hide($("newEntryModal"));
+}
+
+$("openNewEntryBtn").addEventListener("click", openNewEntry);
+$("closeNewEntryBtn").addEventListener("click", closeNewEntry);
+$("cancelNewEntryBtn").addEventListener("click", closeNewEntry);
 
 // ---------- Admin: Neuer Datensatz ----------
 $("newEntryForm").addEventListener("submit", async (e) => {
@@ -362,6 +385,7 @@ $("newEntryForm").addEventListener("submit", async (e) => {
   $("newEntryForm").reset();
   $("entryDate").value = todayIso();
   $("win2dayStatus").textContent = "";
+  closeNewEntry();
   await loadEntries();
   await loadOverview();
 });
@@ -426,6 +450,20 @@ $("editEntryForm").addEventListener("submit", async (event) => {
   closeEditEntry();
   await loadEntries();
   await loadOverview();
+});
+
+[$("newEntryModal"), $("editEntryModal")].forEach((overlay) => {
+  overlay.addEventListener("click", (event) => {
+    if (event.target !== overlay) return;
+    if (overlay === $("newEntryModal")) closeNewEntry();
+    else closeEditEntry();
+  });
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  if (!$("newEntryModal").classList.contains("hidden")) closeNewEntry();
+  if (!$("editEntryModal").classList.contains("hidden")) closeEditEntry();
 });
 
 // ---------- Settings Modal ----------

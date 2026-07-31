@@ -70,48 +70,11 @@
       </div>
     </section>
 
-    <!-- ADMIN: Neuer Datensatz -->
-    <section id="newEntrySection" class="hidden">
-      <h2 class="section-title">Neuen Spielschein erfassen</h2>
-      <div class="ticket">
-        <div class="entry-mode" role="group" aria-label="Art der Erfassung">
-          <button type="button" class="entry-mode-btn active" data-entry-mode="current" aria-pressed="true">Aktuelle Quittung</button>
-          <button type="button" class="entry-mode-btn" data-entry-mode="manual" aria-pressed="false">Ältere Quittung manuell</button>
-        </div>
-        <p id="entryModeHint" class="form-hint">Nur die Quittungsnummer ist verpflichtend. Die übrigen Daten werden nach Möglichkeit automatisch ergänzt.</p>
-        <form id="newEntryForm">
-          <div class="grid2">
-            <label>Datum
-              <input type="date" id="entryDate" />
-            </label>
-            <label>Quittungsnummer
-              <div class="inline-input">
-                <input type="text" id="entryReceipt" placeholder="z.B. 1234567890" required />
-                <button type="button" id="queryWin2dayBtn" class="btn btn-secondary">Daten abrufen</button>
-              </div>
-            </label>
-          </div>
-          <div class="grid2">
-            <label>Spielart
-              <input type="text" id="entryGameType" list="gameTypes" placeholder="Wird automatisch erkannt" />
-            </label>
-            <label>Scheinkosten (€)
-              <input type="number" min="0" step="0.01" id="entryCost" placeholder="0,00" />
-            </label>
-          </div>
-          <div class="grid2">
-            <label>Ziehungsdatum/-daten
-              <input type="text" id="entryDrawDates" placeholder="2026-08-05, 2026-08-08" />
-            </label>
-            <label>Gewinn (€)
-              <input type="number" min="0" step="0.01" id="entryGewinn" placeholder="0,00" />
-            </label>
-          </div>
-          <p id="win2dayStatus" class="muted"></p>
-          <button type="submit" class="btn btn-primary">Datensatz speichern</button>
-          <p id="newEntryError" class="error"></p>
-        </form>
-      </div>
+    <!-- ADMIN: Erfassung öffnen -->
+    <section id="newEntrySection" class="admin-entry-launch hidden">
+      <button type="button" id="openNewEntryBtn" class="btn btn-primary btn-create-entry">
+        <span aria-hidden="true">＋</span> Neuen Spielschein erfassen
+      </button>
     </section>
 
     <!-- Eintragsliste (für alle sichtbar) -->
@@ -167,6 +130,56 @@
         <tbody id="settingsPlayersBody"></tbody>
       </table>
     </div>
+  </div>
+</div>
+
+<!-- NEW ENTRY MODAL (nur Admin) -->
+<div id="newEntryModal" class="modal-overlay hidden">
+  <div class="modal modal-compact" role="dialog" aria-modal="true" aria-labelledby="newEntryTitle">
+    <div class="modal-header">
+      <h2 id="newEntryTitle">Neuen Spielschein erfassen</h2>
+      <button id="closeNewEntryBtn" type="button" class="btn btn-ghost" aria-label="Erfassung schließen">✕</button>
+    </div>
+    <div class="entry-mode" role="group" aria-label="Art des Spielscheins">
+      <button type="button" class="entry-mode-btn active" data-entry-mode="current" aria-pressed="true">Neuer Schein</button>
+      <button type="button" class="entry-mode-btn" data-entry-mode="manual" aria-pressed="false">Alter Schein</button>
+    </div>
+    <p id="entryModeHint" class="form-hint">Nur die Quittungsnummer ist verpflichtend. Die übrigen Daten werden nach Möglichkeit automatisch ergänzt.</p>
+    <form id="newEntryForm">
+      <div class="grid2">
+        <label>Datum
+          <input type="date" id="entryDate" />
+        </label>
+        <label>Quittungsnummer
+          <div class="inline-input">
+            <input type="text" id="entryReceipt" placeholder="z.B. 1234567890" required />
+            <button type="button" id="queryWin2dayBtn" class="btn btn-secondary">Daten abrufen</button>
+          </div>
+        </label>
+      </div>
+      <div class="grid2">
+        <label>Spielart
+          <input type="text" id="entryGameType" list="gameTypes" placeholder="Wird automatisch erkannt" />
+        </label>
+        <label>Scheinkosten (€)
+          <input type="number" min="0" step="0.01" id="entryCost" placeholder="0,00" />
+        </label>
+      </div>
+      <div class="grid2">
+        <label>Ziehungsdatum/-daten
+          <input type="text" id="entryDrawDates" placeholder="2026-08-05, 2026-08-08" />
+        </label>
+        <label>Gewinn (€)
+          <input type="number" min="0" step="0.01" id="entryGewinn" placeholder="0,00" />
+        </label>
+      </div>
+      <p id="win2dayStatus" class="muted" aria-live="polite"></p>
+      <p id="newEntryError" class="error" aria-live="polite"></p>
+      <div class="modal-actions">
+        <button type="button" id="cancelNewEntryBtn" class="btn btn-ghost">Abbrechen</button>
+        <button type="submit" class="btn btn-primary">Datensatz speichern</button>
+      </div>
+    </form>
   </div>
 </div>
 

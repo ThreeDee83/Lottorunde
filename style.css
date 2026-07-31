@@ -262,6 +262,9 @@ input:hover, select:hover { border-color: #3c485a; }
 .menu-toggle { display: none; }
 
 .content { max-width: 1120px; margin: 0 auto; padding: 28px 24px 80px; }
+.admin-entry-launch { display: flex; justify-content: flex-end; margin: 28px 0 6px; }
+.btn-create-entry { min-height: 50px; padding-inline: 22px; font-size: 15px; }
+.btn-create-entry span { font-size: 20px; line-height: 0; vertical-align: -1px; }
 
 /* ============================================================
    TABLES (Desktop)
@@ -328,6 +331,7 @@ td.mono, .mono { font-family: var(--font-mono); }
 .modal h3 { font-family: var(--font-display); margin-top: 30px; margin-bottom: 6px; }
 .modal-compact { max-width: 680px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+.modal .entry-mode { margin-top: 24px; }
 
 /* ============================================================
    RESPONSIVE — TABLETS < 7 ZOLL (ca. bis 768px, Hochformat)
@@ -398,6 +402,8 @@ td.mono, .mono { font-family: var(--font-mono); }
   .content { padding: 14px 12px 72px; }
   .topbar { padding: 10px 12px; }
   .ticket { padding: 20px 18px; }
+  .admin-entry-launch { margin: 18px 0 4px; }
+  .btn-create-entry { width: 100%; }
   .section-title { margin-top: 28px; }
   .entry-mode { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
   .entry-mode-btn { min-height: 44px; padding-inline: 8px; }
@@ -411,6 +417,8 @@ td.mono, .mono { font-family: var(--font-mono); }
   .refresh-btn { width: 100%; }
   .modal-actions { flex-direction: column-reverse; }
   .modal-actions .btn { width: 100%; }
+  .modal-overlay { padding: 10px; align-items: stretch; }
+  .modal { max-height: calc(100dvh - 20px); overflow-y: auto; }
 
   /* Tabellen werden zu gut lesbaren Karten. */
   .table-wrap { border: none; background: none; box-shadow: none; overflow-x: visible; }
