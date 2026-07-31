@@ -86,10 +86,10 @@ async function loadOverview() {
   profiles.forEach((p) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${p.name}</td>
-      <td>${p.role === "admin" ? "Admin" : "User"}</td>
-      <td class="mono">${fmtMoney(p.balance)}</td>
-      <td><button class="btn btn-secondary btn-small" data-id="${p.id}" data-name="${p.name}">Einzahlung</button></td>
+      <td data-label="Name">${p.name}</td>
+      <td data-label="Rolle">${p.role === "admin" ? "Admin" : "User"}</td>
+      <td data-label="Kontostand" class="mono">${fmtMoney(p.balance)}</td>
+      <td data-label=""><button class="btn btn-secondary btn-small" data-id="${p.id}" data-name="${p.name}">Einzahlung</button></td>
     `;
     tr.querySelector("button").addEventListener("click", () => depositPrompt(p.id, p.name));
     body.appendChild(tr);
@@ -126,11 +126,11 @@ async function loadEntries() {
     const tr = document.createElement("tr");
     const draws = (e.draw_dates || []).map((d) => new Date(d).toLocaleDateString("de-AT")).join(", ");
     tr.innerHTML = `
-      <td>${new Date(e.entry_date).toLocaleDateString("de-AT")}</td>
-      <td class="mono">${e.receipt_number}</td>
-      <td>${e.game_type}</td>
-      <td>${draws || "-"}</td>
-      <td class="mono ${e.gewinn > 0 ? "amount-positive" : ""}">${fmtMoney(e.gewinn)}</td>
+      <td data-label="Datum">${new Date(e.entry_date).toLocaleDateString("de-AT")}</td>
+      <td data-label="Quittungsnr." class="mono">${e.receipt_number}</td>
+      <td data-label="Spielart">${e.game_type}</td>
+      <td data-label="Ziehungsdatum">${draws || "-"}</td>
+      <td data-label="Gewinn" class="mono ${e.gewinn > 0 ? "amount-positive" : ""}">${fmtMoney(e.gewinn)}</td>
     `;
     body.appendChild(tr);
   });
@@ -195,6 +195,8 @@ $("newEntryForm").addEventListener("submit", async (e) => {
 // ---------- Settings Modal ----------
 $("settingsBtn").addEventListener("click", async () => {
   show($("settingsModal"));
+  $("topbarRight").classList.remove("open");
+  $("menuToggleBtn").classList.remove("open");
   await loadSettingsPlayers();
 });
 $("closeSettingsBtn").addEventListener("click", () => hide($("settingsModal")));
@@ -211,20 +213,20 @@ async function loadSettingsPlayers() {
   profiles.forEach((p) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${p.name}${p.active ? "" : " <span class=\"muted\">(deaktiviert)</span>"}</td>
-      <td>
+      <td data-label="Name">${p.name}${p.active ? "" : " <span class=\"muted\">(deaktiviert)</span>"}</td>
+      <td data-label="Rolle">
         <select data-role-for="${p.id}">
           <option value="user" ${p.role === "user" ? "selected" : ""}>User</option>
           <option value="admin" ${p.role === "admin" ? "selected" : ""}>Admin</option>
         </select>
       </td>
-      <td>
+      <td data-label="Kontostand">
         <div class="inline-input">
           <input type="number" step="0.01" data-balance-for="${p.id}" value="${p.balance}" />
           <button class="btn btn-secondary btn-small" data-save-balance="${p.id}">Speichern</button>
         </div>
       </td>
-      <td>
+      <td data-label="Status">
         <button class="btn btn-ghost btn-small" data-toggle-active="${p.id}" data-current="${p.active}">
           ${p.active ? "Deaktivieren" : "Aktivieren"}
         </button>
@@ -275,6 +277,12 @@ async function loadSettingsPlayers() {
     });
   });
 }
+
+// ---------- Mobile Menü ----------
+$("menuToggleBtn").addEventListener("click", () => {
+  $("topbarRight").classList.toggle("open");
+  $("menuToggleBtn").classList.toggle("open");
+});
 
 // ---------- Beim Laden prüfen ob bereits eingeloggt ----------
 (async function init() {
