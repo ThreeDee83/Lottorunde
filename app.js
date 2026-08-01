@@ -5,6 +5,7 @@ let allEntries = [];
 let allProfiles = [];
 let activeEntryFilter = "month";
 let appDialogResolver = null;
+let pendingTransactionDelete = null;
 
 // ---------- Helpers ----------
 const fmtMoney = (n) =>
@@ -185,6 +186,7 @@ function appendTableRow(body, cells, rowClass = "") {
     tr.appendChild(td);
   });
   body.appendChild(tr);
+  return tr;
 }
 
 function renderHistoryEmpty(body, colSpan, message) {
@@ -208,14 +210,15 @@ async function openPlayerDeposits(profile) {
 
   const { data, error } = await supabaseClient
     .from("transactions")
-    .select("amount, note, created_at")
+    .select("id, amount, note, created_at")
     .eq("profile_id", profile.id)
     .eq("type", "deposit")
+    .eq("hidden", false)
     .order("created_at", { ascending: false });
 
   if (error) {
     $("playerDepositsStatus").textContent = "Einzahlungsverlauf konnte nicht geladen werden.";
-    renderHistoryEmpty($("playerDepositsBody"), 3, "Keine Daten verfügbar.");
+    renderHistoryEmpty($("playerDepositsBody"), 4, "Keine Daten verfügbar.");
     return;
   }
 
@@ -225,16 +228,21 @@ async function openPlayerDeposits(profile) {
   $("playerDepositsStatus").textContent = `${deposits.length} ${deposits.length === 1 ? "Einzahlung" : "Einzahlungen"}`;
 
   if (!deposits.length) {
-    renderHistoryEmpty($("playerDepositsBody"), 3, "Für diesen Spieler sind noch keine Einzahlungen vorhanden.");
+    renderHistoryEmpty($("playerDepositsBody"), 4, "Für diesen Spieler sind noch keine Einzahlungen vorhanden.");
     return;
   }
 
   deposits.forEach((deposit) => {
-    appendTableRow($("playerDepositsBody"), [
+    const row = appendTableRow($("playerDepositsBody"), [
       { label: "Datum", text: formatDateTime(deposit.created_at) },
       { label: "Betrag", text: fmtMoney(deposit.amount), className: "mono transaction-deposit" },
       { label: "Beschreibung", text: deposit.note || "Einzahlung" },
     ], "transaction-row transaction-row-deposit");
+    addTransactionDeleteControls(row, {
+      ...deposit,
+      type: "deposit",
+      profileName: profile.name,
+    }, () => openPlayerDeposits(profile));
   });
 }
 
@@ -261,12 +269,13 @@ async function openTransactionsLog() {
 
   const { data, error } = await supabaseClient
     .from("transactions")
-    .select("profile_id, amount, type, note, created_at")
+    .select("id, profile_id, amount, type, note, created_at")
+    .eq("hidden", false)
     .order("created_at", { ascending: false });
 
   if (error) {
     $("transactionsLogStatus").textContent = "Transaktionslog konnte nicht geladen werden.";
-    renderHistoryEmpty($("transactionsLogBody"), 5, "Keine Daten verfügbar.");
+    renderHistoryEmpty($("transactionsLogBody"), 6, "Keine Daten verfügbar.");
     return;
   }
 
@@ -275,24 +284,148 @@ async function openTransactionsLog() {
   $("transactionsLogStatus").textContent = `${transactions.length} ${transactions.length === 1 ? "Transaktion" : "Transaktionen"}`;
 
   if (!transactions.length) {
-    renderHistoryEmpty($("transactionsLogBody"), 5, "Es sind noch keine Transaktionen vorhanden.");
+    renderHistoryEmpty($("transactionsLogBody"), 6, "Es sind noch keine Transaktionen vorhanden.");
     return;
   }
 
   transactions.forEach((transaction) => {
     const meta = transactionTypeMeta(transaction.type);
-    appendTableRow($("transactionsLogBody"), [
+    const profileName = profileNames.get(transaction.profile_id) || "Unbekannter Spieler";
+    const row = appendTableRow($("transactionsLogBody"), [
       { label: "Datum", text: formatDateTime(transaction.created_at) },
-      { label: "Spieler", text: profileNames.get(transaction.profile_id) || "Unbekannter Spieler" },
+      { label: "Spieler", text: profileName },
       { label: "Art", text: meta.label, className: `transaction-badge ${meta.className}` },
       { label: "Betrag", text: fmtMoney(transaction.amount), className: `mono ${meta.className}` },
       { label: "Beschreibung", text: transaction.note || "-" },
     ], `transaction-row ${meta.rowClass}`);
+    addTransactionDeleteControls(row, {
+      ...transaction,
+      profileName,
+    }, openTransactionsLog);
   });
 }
 
 function closeTransactionsLog() {
   hide($("transactionsLogModal"));
+}
+
+function addTransactionDeleteControls(row, transaction, refresh) {
+  const actionCell = document.createElement("td");
+  actionCell.className = "history-actions";
+  actionCell.dataset.label = "Aktion";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "btn btn-danger btn-icon";
+  button.setAttribute("aria-label", "Logzeile löschen");
+  button.title = "Logzeile löschen";
+  button.innerHTML = '<span class="material-symbols-rounded" aria-hidden="true">delete</span>';
+  button.addEventListener("click", () => openTransactionDeleteConfirm(transaction, refresh));
+  actionCell.appendChild(button);
+  row.appendChild(actionCell);
+  attachTransactionSwipe(row, () => openTransactionDeleteConfirm(transaction, refresh));
+}
+
+function attachTransactionSwipe(row, onDelete) {
+  let startX = 0;
+  let startY = 0;
+  let deltaX = 0;
+  let isHorizontal = false;
+
+  row.addEventListener("touchstart", (event) => {
+    if (event.touches.length !== 1) return;
+    startX = event.touches[0].clientX;
+    startY = event.touches[0].clientY;
+    deltaX = 0;
+    isHorizontal = false;
+    row.classList.add("log-swipe-tracking");
+  }, { passive: true });
+
+  row.addEventListener("touchmove", (event) => {
+    if (event.touches.length !== 1) return;
+    deltaX = event.touches[0].clientX - startX;
+    const deltaY = event.touches[0].clientY - startY;
+    isHorizontal = Math.abs(deltaX) > 10 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2;
+    if (!isHorizontal || deltaX > 0) return;
+    row.style.transform = `translateX(${Math.max(-88, deltaX)}px)`;
+    row.classList.add("log-swipe-delete");
+  }, { passive: true });
+
+  const finish = () => {
+    row.classList.remove("log-swipe-tracking", "log-swipe-delete");
+    row.style.transform = "";
+    if (isHorizontal && deltaX < -72) onDelete();
+    isHorizontal = false;
+    deltaX = 0;
+  };
+
+  row.addEventListener("touchend", finish, { passive: true });
+  row.addEventListener("touchcancel", () => {
+    isHorizontal = false;
+    finish();
+  }, { passive: true });
+}
+
+function deletePhraseMatches(value) {
+  return value.trim() === "LÖSCHEN";
+}
+
+function openTransactionDeleteConfirm(transaction, refresh) {
+  const meta = transactionTypeMeta(transaction.type);
+  pendingTransactionDelete = { transaction, refresh };
+  $("deleteTransactionMessage").textContent = `${meta.label} über ${fmtMoney(transaction.amount)} für ${transaction.profileName} vom ${formatDateTime(transaction.created_at)} löschen?`;
+  $("deleteTransactionConfirmText").value = "";
+  $("deleteTransactionStatus").textContent = "";
+  $("confirmDeleteTransactionBtn").disabled = true;
+  show($("deleteTransactionModal"));
+  $("deleteTransactionConfirmText").focus();
+}
+
+function closeTransactionDeleteConfirm() {
+  hide($("deleteTransactionModal"));
+  pendingTransactionDelete = null;
+  $("deleteTransactionForm").reset();
+}
+
+function populateClearLogScopes() {
+  const select = $("clearLogScope");
+  select.innerHTML = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "Spieler oder gesamten Log wählen";
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  select.appendChild(placeholder);
+
+  const allOption = document.createElement("option");
+  allOption.value = "all";
+  allOption.textContent = "Gesamter Transaktionslog";
+  select.appendChild(allOption);
+
+  allProfiles.forEach((profile) => {
+    const option = document.createElement("option");
+    option.value = profile.id;
+    option.textContent = `Nur ${profile.name}`;
+    select.appendChild(option);
+  });
+}
+
+function updateClearLogButton() {
+  $("confirmClearLogBtn").disabled = !$("clearLogScope").value || !deletePhraseMatches($("clearLogConfirmText").value);
+}
+
+function openClearLog() {
+  if (currentProfile?.role !== "admin") return;
+  $("clearLogForm").reset();
+  $("clearLogStatus").textContent = "";
+  populateClearLogScopes();
+  updateClearLogButton();
+  show($("clearLogModal"));
+  $("closeClearLogBtn").focus();
+}
+
+function closeClearLog() {
+  hide($("clearLogModal"));
+  $("clearLogForm").reset();
 }
 
 function populateDepositPlayers() {
@@ -753,8 +886,65 @@ $("closePlayerDepositsActionBtn").addEventListener("click", closePlayerDeposits)
 $("openTransactionsLogBtn").addEventListener("click", openTransactionsLog);
 $("closeTransactionsLogBtn").addEventListener("click", closeTransactionsLog);
 $("closeTransactionsLogActionBtn").addEventListener("click", closeTransactionsLog);
+$("openClearLogBtn").addEventListener("click", openClearLog);
+$("closeClearLogBtn").addEventListener("click", closeClearLog);
+$("cancelClearLogBtn").addEventListener("click", closeClearLog);
+$("clearLogScope").addEventListener("change", updateClearLogButton);
+$("clearLogConfirmText").addEventListener("input", updateClearLogButton);
+$("closeDeleteTransactionBtn").addEventListener("click", closeTransactionDeleteConfirm);
+$("cancelDeleteTransactionBtn").addEventListener("click", closeTransactionDeleteConfirm);
+$("deleteTransactionConfirmText").addEventListener("input", () => {
+  $("confirmDeleteTransactionBtn").disabled = !deletePhraseMatches($("deleteTransactionConfirmText").value);
+});
 
-[$("newEntryModal"), $("editEntryModal"), $("depositModal"), $("entryDetailsModal"), $("playerDepositsModal"), $("transactionsLogModal")].forEach((overlay) => {
+$("clearLogForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const scope = $("clearLogScope").value;
+  if (!scope || !deletePhraseMatches($("clearLogConfirmText").value)) return;
+
+  const button = $("confirmClearLogBtn");
+  button.disabled = true;
+  $("clearLogStatus").textContent = "Log wird gelöscht …";
+  const { data, error } = await supabaseClient.rpc("admin_clear_transaction_log", {
+    target_profile_id: scope === "all" ? null : scope,
+  });
+
+  if (error) {
+    $("clearLogStatus").textContent = "Log konnte nicht gelöscht werden: " + error.message;
+    updateClearLogButton();
+    return;
+  }
+
+  closeClearLog();
+  await showAppDialog({
+    title: "Log gelöscht",
+    message: `${Number(data || 0)} sichtbare Logzeilen wurden entfernt. Kontostände bleiben unverändert.`,
+  });
+});
+
+$("deleteTransactionForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!pendingTransactionDelete || !deletePhraseMatches($("deleteTransactionConfirmText").value)) return;
+
+  const pending = pendingTransactionDelete;
+  const button = $("confirmDeleteTransactionBtn");
+  button.disabled = true;
+  $("deleteTransactionStatus").textContent = "Logzeile wird gelöscht …";
+  const { error } = await supabaseClient.rpc("admin_hide_transaction", {
+    target_transaction_id: pending.transaction.id,
+  });
+
+  if (error) {
+    $("deleteTransactionStatus").textContent = "Logzeile konnte nicht gelöscht werden: " + error.message;
+    button.disabled = false;
+    return;
+  }
+
+  closeTransactionDeleteConfirm();
+  await pending.refresh();
+});
+
+[$("newEntryModal"), $("editEntryModal"), $("depositModal"), $("entryDetailsModal"), $("playerDepositsModal"), $("transactionsLogModal"), $("clearLogModal"), $("deleteTransactionModal")].forEach((overlay) => {
   overlay.addEventListener("click", (event) => {
     if (event.target !== overlay) return;
     if (overlay === $("newEntryModal")) closeNewEntry();
@@ -762,6 +952,8 @@ $("closeTransactionsLogActionBtn").addEventListener("click", closeTransactionsLo
     else if (overlay === $("entryDetailsModal")) closeEntryDetails();
     else if (overlay === $("playerDepositsModal")) closePlayerDeposits();
     else if (overlay === $("transactionsLogModal")) closeTransactionsLog();
+    else if (overlay === $("clearLogModal")) closeClearLog();
+    else if (overlay === $("deleteTransactionModal")) closeTransactionDeleteConfirm();
     else closeDeposit();
   });
 });
@@ -770,6 +962,14 @@ document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   if (!$("appDialogModal").classList.contains("hidden")) {
     closeAppDialog(false);
+    return;
+  }
+  if (!$("deleteTransactionModal").classList.contains("hidden")) {
+    closeTransactionDeleteConfirm();
+    return;
+  }
+  if (!$("clearLogModal").classList.contains("hidden")) {
+    closeClearLog();
     return;
   }
   if (!$("depositModal").classList.contains("hidden")) closeDeposit();

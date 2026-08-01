@@ -137,6 +137,10 @@
         <span class="material-symbols-rounded" aria-hidden="true">receipt_long</span>
         Transaktionslog
       </button>
+      <button type="button" id="openClearLogBtn" class="btn btn-danger">
+        <span class="material-symbols-rounded" aria-hidden="true">delete_sweep</span>
+        Log löschen
+      </button>
     </div>
     <h3>Spieler &amp; Rollen</h3>
     <div class="table-wrap">
@@ -162,7 +166,7 @@
     <p id="playerDepositsStatus" class="muted" aria-live="polite"></p>
     <div class="table-wrap history-table-wrap">
       <table class="history-table">
-        <thead><tr><th>Datum</th><th>Betrag</th><th>Beschreibung</th></tr></thead>
+        <thead><tr><th>Datum</th><th>Betrag</th><th>Beschreibung</th><th><span class="sr-only">Aktion</span></th></tr></thead>
         <tbody id="playerDepositsBody"></tbody>
       </table>
     </div>
@@ -182,13 +186,59 @@
     <p id="transactionsLogStatus" class="muted" aria-live="polite"></p>
     <div class="table-wrap history-table-wrap">
       <table class="history-table transaction-log-table">
-        <thead><tr><th>Datum</th><th>Spieler</th><th>Art</th><th>Betrag</th><th>Beschreibung</th></tr></thead>
+        <thead><tr><th>Datum</th><th>Spieler</th><th>Art</th><th>Betrag</th><th>Beschreibung</th><th><span class="sr-only">Aktion</span></th></tr></thead>
         <tbody id="transactionsLogBody"></tbody>
       </table>
     </div>
     <div class="modal-actions">
       <button id="closeTransactionsLogActionBtn" type="button" class="btn btn-primary">Schließen</button>
     </div>
+  </div>
+</div>
+
+<!-- GESAMTEN ODER SPIELERBEZOGENEN LOG LÖSCHEN (nur Admin) -->
+<div id="clearLogModal" class="modal-overlay hidden">
+  <div class="modal modal-small" role="dialog" aria-modal="true" aria-labelledby="clearLogTitle">
+    <div class="modal-header">
+      <h2 id="clearLogTitle">Log löschen</h2>
+      <button id="closeClearLogBtn" type="button" class="btn btn-ghost" aria-label="Log löschen schließen">✕</button>
+    </div>
+    <form id="clearLogForm">
+      <label>Zu löschender Verlauf
+        <select id="clearLogScope" required></select>
+      </label>
+      <p class="dialog-warning">Die sichtbaren Logzeilen werden entfernt. Kontostände und interne Abrechnungsdaten bleiben unverändert.</p>
+      <label>Zur Sicherheitsbestätigung <strong>LÖSCHEN</strong> eingeben
+        <input type="text" id="clearLogConfirmText" autocomplete="off" spellcheck="false" placeholder="LÖSCHEN" required />
+      </label>
+      <p id="clearLogStatus" class="error" aria-live="polite"></p>
+      <div class="modal-actions">
+        <button type="button" id="cancelClearLogBtn" class="btn btn-ghost">Abbrechen</button>
+        <button type="submit" id="confirmClearLogBtn" class="btn btn-danger" disabled>Log löschen</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- EINZELNE LOGZEILE LÖSCHEN (nur Admin) -->
+<div id="deleteTransactionModal" class="modal-overlay hidden">
+  <div class="modal modal-small" role="dialog" aria-modal="true" aria-labelledby="deleteTransactionTitle">
+    <div class="modal-header">
+      <h2 id="deleteTransactionTitle">Logzeile löschen?</h2>
+      <button id="closeDeleteTransactionBtn" type="button" class="btn btn-ghost" aria-label="Löschen abbrechen">✕</button>
+    </div>
+    <p id="deleteTransactionMessage" class="dialog-message"></p>
+    <p class="dialog-warning">Die Logzeile wird ausgeblendet. Der Kontostand bleibt unverändert.</p>
+    <form id="deleteTransactionForm">
+      <label>Zur Sicherheitsbestätigung <strong>LÖSCHEN</strong> eingeben
+        <input type="text" id="deleteTransactionConfirmText" autocomplete="off" spellcheck="false" placeholder="LÖSCHEN" required />
+      </label>
+      <p id="deleteTransactionStatus" class="error" aria-live="polite"></p>
+      <div class="modal-actions">
+        <button type="button" id="cancelDeleteTransactionBtn" class="btn btn-ghost">Abbrechen</button>
+        <button type="submit" id="confirmDeleteTransactionBtn" class="btn btn-danger" disabled>Logzeile löschen</button>
+      </div>
+    </form>
   </div>
 </div>
 

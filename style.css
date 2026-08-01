@@ -584,7 +584,7 @@ td.mono, .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nu
 .modal h3 { margin: 30px 0 7px; font-size: 18px; font-weight: 800; }
 .modal .entry-mode { margin-top: 24px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 5px; }
-.settings-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
+.settings-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
 .settings-actions .btn { display: inline-flex; align-items: center; gap: 8px; }
 .history-summary {
   display: flex;
@@ -603,8 +603,21 @@ td.mono, .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nu
 .history-table-wrap { max-height: min(58vh, 540px); margin: 14px 0 18px; overflow: auto; }
 .history-table th { position: sticky; top: 0; z-index: 1; }
 .history-table td { vertical-align: top; }
+.history-table th:last-child, .history-table tbody tr:not(.empty-row) td:last-child { width: 1%; white-space: nowrap; }
+.history-actions { text-align: right; }
+.history-actions .btn { width: 38px; min-height: 38px; }
 .transaction-log-table td:nth-child(4) { text-align: right; white-space: nowrap; }
 .dialog-message { margin: 20px 0 4px; color: var(--text-soft); line-height: 1.65; }
+.dialog-warning {
+  margin: 2px 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 150, 150, .35);
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.55;
+}
 .details-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -842,6 +855,17 @@ td.mono, .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nu
     box-shadow: inset -6px 0 0 rgba(255, 150, 150, .85), var(--shadow-md);
   }
   .history-table-wrap { max-height: calc(100dvh - 210px); overflow-y: auto !important; }
+  .history-table tbody tr {
+    position: relative;
+    touch-action: pan-y;
+    transition: transform .18s ease, border-color .15s ease, box-shadow .15s ease;
+  }
+  .history-table tbody tr.log-swipe-tracking { transition: none; }
+  .history-table tbody tr.log-swipe-delete {
+    border-color: var(--danger);
+    box-shadow: inset -6px 0 0 rgba(255, 150, 150, .85), var(--shadow-md);
+  }
+  .history-table .history-actions { display: none !important; }
 }
 
 @media (max-width: 440px) and (orientation: portrait) {
