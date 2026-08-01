@@ -646,32 +646,6 @@ function attachEntrySwipe(row, entry, deleteButton) {
   }, { passive: true });
 }
 
-$("refreshEntriesBtn").addEventListener("click", async () => {
-  const button = $("refreshEntriesBtn");
-  button.disabled = true;
-  button.textContent = "↻ Wird aktualisiert …";
-  $("entriesRefreshStatus").textContent = "Daten werden aktualisiert.";
-
-  if (currentProfile.role === "admin") {
-    await loadOverview();
-  } else {
-    const { data: profile } = await supabaseClient
-      .from("profiles")
-      .select("balance")
-      .eq("id", currentProfile.id)
-      .single();
-    if (profile) {
-      currentProfile.balance = profile.balance;
-      setBalanceDisplay($("userBalanceAmount"), profile.balance);
-    }
-  }
-
-  await loadEntries();
-  button.disabled = false;
-  button.textContent = "↻ Aktualisieren";
-  $("entriesRefreshStatus").textContent = "Tabelle und Kontostände wurden aktualisiert.";
-});
-
 document.querySelectorAll("[data-entry-filter]").forEach((button) => {
   button.addEventListener("click", () => {
     activeEntryFilter = button.dataset.entryFilter;

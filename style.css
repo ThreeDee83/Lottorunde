@@ -545,7 +545,6 @@ td.mono, .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nu
 }
 .section-heading .section-title { margin: 0 0 4px; }
 .entries-toolbar { display: flex; align-items: center; gap: 8px; }
-.refresh-btn { min-height: 48px; white-space: nowrap; }
 
 /* Modals */
 .modal-overlay {
@@ -721,7 +720,6 @@ td.mono, .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nu
   input, select, .btn { min-height: 48px; font-size: 16px; }
 
   .entries-toolbar { display: grid; grid-template-columns: 1fr; }
-  .refresh-btn { width: 100%; }
   .table-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; gap: 3px; overflow: visible; }
   .table-filters .filter-btn { min-width: 0; min-height: 44px; padding-inline: 4px; font-size: 10px; white-space: nowrap; }
   .table-filters .filter-btn:last-child { grid-column: auto; }
