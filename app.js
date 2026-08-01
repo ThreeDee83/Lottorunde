@@ -2,8 +2,10 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 
 let currentProfile = null; // { id, name, role, balance }
 let allEntries = [];
+let allProfiles = [];
 let activeEntryFilter = "month";
 let receiptLookupTimer = null;
+let appDialogResolver = null;
 
 // ---------- Helpers ----------
 const fmtMoney = (n) =>
@@ -31,6 +33,30 @@ function parseDrawDates(value) {
     .map((item) => item.trim())
     .filter(Boolean);
 }
+
+function showAppDialog({ title, message, confirmLabel = "OK", cancelLabel = null, danger = false }) {
+  if (appDialogResolver) appDialogResolver(false);
+  $("appDialogTitle").textContent = title;
+  $("appDialogMessage").textContent = message;
+  $("appDialogConfirmBtn").textContent = confirmLabel;
+  $("appDialogConfirmBtn").classList.toggle("btn-danger", danger);
+  $("appDialogConfirmBtn").classList.toggle("btn-primary", !danger);
+  $("appDialogCancelBtn").textContent = cancelLabel || "Abbrechen";
+  $("appDialogCancelBtn").classList.toggle("hidden", !cancelLabel);
+  show($("appDialogModal"));
+  $("appDialogConfirmBtn").focus();
+  return new Promise((resolve) => { appDialogResolver = resolve; });
+}
+
+function closeAppDialog(result) {
+  hide($("appDialogModal"));
+  const resolve = appDialogResolver;
+  appDialogResolver = null;
+  if (resolve) resolve(result);
+}
+
+$("appDialogConfirmBtn").addEventListener("click", () => closeAppDialog(true));
+$("appDialogCancelBtn").addEventListener("click", () => closeAppDialog(false));
 
 // ---------- Auth ----------
 $("loginForm").addEventListener("submit", async (e) => {
@@ -103,35 +129,73 @@ async function loadOverview() {
 
   if (error) return;
 
+  allProfiles = profiles || [];
+  populateDepositPlayers();
+
   const body = $("overviewTableBody");
   body.innerHTML = "";
-  profiles.forEach((p) => {
+  allProfiles.forEach((p) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td data-label="Name">${p.name}</td>
-      <td data-label="Rolle">${p.role === "admin" ? "Admin" : "User"}</td>
-      <td data-label="Kontostand" class="mono">${fmtMoney(p.balance)}</td>
-      <td data-label=""><button class="btn btn-secondary btn-small" data-id="${p.id}" data-name="${p.name}">Einzahlung</button></td>
+      <td data-label="Name" class="profile-card-name">${p.name}</td>
+      <td data-label="Kontostand" class="mono profile-card-balance">${fmtMoney(p.balance)}</td>
     `;
-    tr.querySelector("button").addEventListener("click", () => depositPrompt(p.id, p.name));
     body.appendChild(tr);
   });
 }
 
-async function depositPrompt(id, name) {
-  const amountStr = prompt(`Einzahlungsbetrag für ${name} in €:`);
-  if (amountStr === null) return;
-  const amount = parseFloat(amountStr.replace(",", "."));
-  if (isNaN(amount) || amount === 0) { alert("Ungültiger Betrag."); return; }
+function populateDepositPlayers() {
+  const select = $("depositPlayer");
+  select.innerHTML = "";
+  allProfiles.forEach((profile) => {
+    const option = document.createElement("option");
+    option.value = profile.id;
+    option.textContent = profile.name;
+    select.appendChild(option);
+  });
+}
 
+function openDeposit() {
+  $("depositForm").reset();
+  $("depositStatus").textContent = "";
+  populateDepositPlayers();
+  show($("depositModal"));
+  $("depositPlayer").focus();
+}
+
+function closeDeposit() {
+  hide($("depositModal"));
+}
+
+$("openDepositBtn").addEventListener("click", openDeposit);
+$("closeDepositBtn").addEventListener("click", closeDeposit);
+$("cancelDepositBtn").addEventListener("click", closeDeposit);
+
+$("depositForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const amount = Number.parseFloat($("depositAmount").value);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    $("depositStatus").textContent = "Bitte einen Betrag größer als 0 eingeben.";
+    return;
+  }
+
+  const button = $("saveDepositBtn");
+  button.disabled = true;
+  $("depositStatus").textContent = "";
   const { error } = await supabaseClient.rpc("admin_deposit", {
-    target_id: id,
+    target_id: $("depositPlayer").value,
     deposit_amount: amount,
     deposit_note: "Einzahlung über Website",
   });
-  if (error) { alert("Fehler: " + error.message); return; }
+  button.disabled = false;
+  if (error) {
+    $("depositStatus").textContent = "Fehler: " + error.message;
+    return;
+  }
+
+  closeDeposit();
   await loadOverview();
-}
+});
 
 // ---------- Eintragsliste ----------
 async function loadEntries() {
@@ -195,17 +259,68 @@ function renderEntries() {
       actionCell.dataset.label = "Aktionen";
       actionCell.innerHTML = `
         <div class="action-group">
-          <button type="button" class="btn btn-secondary btn-small" data-edit-entry="${e.id}">Bearbeiten</button>
-          <button type="button" class="btn btn-danger btn-small" data-delete-entry="${e.id}">Löschen</button>
+          <button type="button" class="btn btn-secondary btn-icon" data-edit-entry="${e.id}" aria-label="Spielschein bearbeiten" title="Bearbeiten">
+            <span class="material-symbols-rounded" aria-hidden="true">edit</span>
+          </button>
+          <button type="button" class="btn btn-danger btn-icon" data-delete-entry="${e.id}" aria-label="Spielschein löschen" title="Löschen">
+            <span class="material-symbols-rounded" aria-hidden="true">delete</span>
+          </button>
         </div>
       `;
       actionCell.querySelector("[data-edit-entry]").addEventListener("click", () => openEditEntry(e));
-      actionCell.querySelector("[data-delete-entry]").addEventListener("click", (event) => deleteEntry(e, event.currentTarget));
+      const deleteButton = actionCell.querySelector("[data-delete-entry]");
+      deleteButton.addEventListener("click", (event) => deleteEntry(e, event.currentTarget));
       tr.appendChild(actionCell);
+      attachEntrySwipe(tr, e, deleteButton);
     }
 
     body.appendChild(tr);
   });
+}
+
+function attachEntrySwipe(row, entry, deleteButton) {
+  let startX = 0;
+  let startY = 0;
+  let deltaX = 0;
+  let isHorizontal = false;
+
+  row.addEventListener("touchstart", (event) => {
+    if (event.touches.length !== 1) return;
+    startX = event.touches[0].clientX;
+    startY = event.touches[0].clientY;
+    deltaX = 0;
+    isHorizontal = false;
+    row.classList.add("swipe-tracking");
+  }, { passive: true });
+
+  row.addEventListener("touchmove", (event) => {
+    if (event.touches.length !== 1) return;
+    const currentX = event.touches[0].clientX;
+    const currentY = event.touches[0].clientY;
+    deltaX = currentX - startX;
+    const deltaY = currentY - startY;
+    isHorizontal = Math.abs(deltaX) > 10 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2;
+    if (!isHorizontal) return;
+
+    const offset = Math.max(-88, Math.min(88, deltaX));
+    row.style.transform = `translateX(${offset}px)`;
+    row.classList.toggle("swipe-edit", deltaX > 0);
+    row.classList.toggle("swipe-delete", deltaX < 0);
+  }, { passive: true });
+
+  const finishSwipe = () => {
+    row.classList.remove("swipe-tracking", "swipe-edit", "swipe-delete");
+    row.style.transform = "";
+    if (!isHorizontal || Math.abs(deltaX) < 72) return;
+    if (deltaX > 0) openEditEntry(entry);
+    else deleteEntry(entry, deleteButton);
+  };
+
+  row.addEventListener("touchend", finishSwipe, { passive: true });
+  row.addEventListener("touchcancel", () => {
+    isHorizontal = false;
+    finishSwipe();
+  }, { passive: true });
 }
 
 $("refreshEntriesBtn").addEventListener("click", async () => {
@@ -247,19 +362,23 @@ document.querySelectorAll("[data-entry-filter]").forEach((button) => {
 });
 
 async function deleteEntry(entry, button) {
-  const confirmed = confirm(
-    `Spielschein ${entry.receipt_number} vom ${formatDate(entry.entry_date)} wirklich löschen?` +
-    " Verrechnete Kosten und Gewinne werden in den Kontoständen zurückgerechnet."
-  );
+  const confirmed = await showAppDialog({
+    title: "Spielschein löschen?",
+    message: `Quittung ${entry.receipt_number} vom ${formatDate(entry.entry_date)} wird dauerhaft gelöscht. Verrechnete Kosten und Gewinne werden in den Kontoständen zurückgerechnet.`,
+    confirmLabel: "Löschen",
+    cancelLabel: "Abbrechen",
+    danger: true,
+  });
   if (!confirmed) return;
 
+  const originalButtonHtml = button.innerHTML;
   button.disabled = true;
-  button.textContent = "Lösche …";
+  button.innerHTML = '<span class="material-symbols-rounded" aria-hidden="true">progress_activity</span>';
   const { error } = await supabaseClient.rpc("admin_delete_entry", { target_entry_id: entry.id });
   if (error) {
     button.disabled = false;
-    button.textContent = "Löschen";
-    alert("Fehler beim Löschen: " + error.message);
+    button.innerHTML = originalButtonHtml;
+    await showAppDialog({ title: "Löschen fehlgeschlagen", message: error.message });
     return;
   }
 
@@ -452,16 +571,22 @@ $("editEntryForm").addEventListener("submit", async (event) => {
   await loadOverview();
 });
 
-[$("newEntryModal"), $("editEntryModal")].forEach((overlay) => {
+[$("newEntryModal"), $("editEntryModal"), $("depositModal")].forEach((overlay) => {
   overlay.addEventListener("click", (event) => {
     if (event.target !== overlay) return;
     if (overlay === $("newEntryModal")) closeNewEntry();
-    else closeEditEntry();
+    else if (overlay === $("editEntryModal")) closeEditEntry();
+    else closeDeposit();
   });
 });
 
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
+  if (!$("appDialogModal").classList.contains("hidden")) {
+    closeAppDialog(false);
+    return;
+  }
+  if (!$("depositModal").classList.contains("hidden")) closeDeposit();
   if (!$("newEntryModal").classList.contains("hidden")) closeNewEntry();
   if (!$("editEntryModal").classList.contains("hidden")) closeEditEntry();
 });
@@ -513,7 +638,7 @@ async function loadSettingsPlayers() {
     sel.addEventListener("change", async () => {
       const id = sel.getAttribute("data-role-for");
       const { error } = await supabaseClient.rpc("admin_set_role", { target_id: id, new_role: sel.value });
-      if (error) alert("Fehler: " + error.message);
+      if (error) await showAppDialog({ title: "Rolle konnte nicht geändert werden", message: error.message });
     });
   });
 
@@ -527,9 +652,12 @@ async function loadSettingsPlayers() {
         new_balance: newBalance,
         correction_note: "Manuelle Korrektur in den Einstellungen",
       });
-      if (error) { alert("Fehler: " + error.message); return; }
+      if (error) {
+        await showAppDialog({ title: "Kontostand konnte nicht geändert werden", message: error.message });
+        return;
+      }
       await loadOverview();
-      alert("Kontostand aktualisiert.");
+      await showAppDialog({ title: "Kontostand aktualisiert", message: "Die Korrektur wurde erfolgreich gespeichert." });
     });
   });
 
@@ -539,13 +667,23 @@ async function loadSettingsPlayers() {
       const isCurrentlyActive = btn.getAttribute("data-current") === "true";
       const newActive = !isCurrentlyActive;
       const label = newActive ? "aktivieren" : "deaktivieren";
-      if (!confirm(`Diesen Spieler wirklich ${label}?`)) return;
+      const confirmed = await showAppDialog({
+        title: `Spieler ${label}?`,
+        message: `Möchtest du diesen Spieler wirklich ${label}?`,
+        confirmLabel: newActive ? "Aktivieren" : "Deaktivieren",
+        cancelLabel: "Abbrechen",
+        danger: !newActive,
+      });
+      if (!confirmed) return;
 
       const { error } = await supabaseClient.rpc("admin_set_active", {
         target_id: id,
         new_active: newActive,
       });
-      if (error) { alert("Fehler: " + error.message); return; }
+      if (error) {
+        await showAppDialog({ title: "Status konnte nicht geändert werden", message: error.message });
+        return;
+      }
       await loadSettingsPlayers();
       await loadOverview();
     });
