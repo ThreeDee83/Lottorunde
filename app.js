@@ -4,7 +4,6 @@ let currentProfile = null; // { id, name, role, balance }
 let allEntries = [];
 let allProfiles = [];
 let activeEntryFilter = "month";
-let receiptLookupTimer = null;
 let appDialogResolver = null;
 
 // ---------- Helpers ----------
@@ -32,6 +31,19 @@ function parseDrawDates(value) {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function balanceToneClass(value) {
+  const amount = Number(value || 0);
+  if (amount > 0) return "amount-positive";
+  if (amount < 0) return "amount-negative";
+  return "";
+}
+
+function setBalanceDisplay(element, value) {
+  element.textContent = fmtMoney(value);
+  element.classList.toggle("amount-positive", Number(value) > 0);
+  element.classList.toggle("amount-negative", Number(value) < 0);
 }
 
 function showAppDialog({ title, message, confirmLabel = "OK", cancelLabel = null, danger = false }) {
@@ -113,7 +125,7 @@ async function bootstrapApp() {
     await loadOverview();
   } else {
     show($("userBalanceSection"));
-    $("userBalanceAmount").textContent = fmtMoney(profile.balance);
+    setBalanceDisplay($("userBalanceAmount"), profile.balance);
   }
 
   await loadEntries();
@@ -138,7 +150,7 @@ async function loadOverview() {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td data-label="Name" class="profile-card-name">${p.name}</td>
-      <td data-label="Kontostand" class="mono profile-card-balance">${fmtMoney(p.balance)}</td>
+      <td data-label="Kontostand" class="mono profile-card-balance ${balanceToneClass(p.balance)}">${fmtMoney(p.balance)}</td>
     `;
     body.appendChild(tr);
   });
@@ -147,6 +159,12 @@ async function loadOverview() {
 function populateDepositPlayers() {
   const select = $("depositPlayer");
   select.innerHTML = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "Spieler wählen";
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  select.appendChild(placeholder);
   allProfiles.forEach((profile) => {
     const option = document.createElement("option");
     option.value = profile.id;
@@ -160,7 +178,7 @@ function openDeposit() {
   $("depositStatus").textContent = "";
   populateDepositPlayers();
   show($("depositModal"));
-  $("depositPlayer").focus();
+  $("closeDepositBtn").focus();
 }
 
 function closeDeposit() {
@@ -173,6 +191,10 @@ $("cancelDepositBtn").addEventListener("click", closeDeposit);
 
 $("depositForm").addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!$("depositPlayer").value) {
+    $("depositStatus").textContent = "Bitte zuerst einen Spieler wählen.";
+    return;
+  }
   const amount = Number.parseFloat($("depositAmount").value);
   if (!Number.isFinite(amount) || amount <= 0) {
     $("depositStatus").textContent = "Bitte einen Betrag größer als 0 eingeben.";
@@ -370,7 +392,7 @@ $("refreshEntriesBtn").addEventListener("click", async () => {
       .single();
     if (profile) {
       currentProfile.balance = profile.balance;
-      $("userBalanceAmount").textContent = fmtMoney(profile.balance);
+      setBalanceDisplay($("userBalanceAmount"), profile.balance);
     }
   }
 
@@ -417,70 +439,64 @@ async function deleteEntry(entry, button) {
   await loadOverview();
 }
 
-// ---------- Admin: Win2Day Abfrage ----------
-async function queryReceiptData(fields, button, statusEl) {
-  const receipt = $(fields.receipt).value.trim();
-  if (!receipt) { statusEl.textContent = "Bitte zuerst eine Quittungsnummer eingeben."; return; }
-  statusEl.textContent = "Lese Spielschein-Daten aus …";
-  button.disabled = true;
+// ---------- Admin: Spielart auswählen ----------
+const standardGameTypes = ["Lotto", "Joker", "Euromillionen"];
 
-  try {
-    const { data, error } = await supabaseClient.functions.invoke("win2day-query", {
-      body: { receiptNumber: receipt },
-    });
-    if (error) throw error;
-    if (data.error) { statusEl.textContent = data.error; return; }
-    if ($(fields.receipt).value.trim() !== receipt) return;
-
-    if (data.gameType) $(fields.gameType).value = data.gameType;
-    if (typeof data.cost === "number") $(fields.cost).value = data.cost;
-    if (typeof data.gewinn === "number") $(fields.gewinn).value = data.gewinn;
-    if (data.drawDates && data.drawDates.length) $(fields.drawDates).value = data.drawDates.join(", ");
-
-    statusEl.textContent = data.note || "Daten übernommen – bitte prüfen.";
-  } catch (err) {
-    statusEl.textContent = "Automatische Abfrage nicht möglich. Bitte Daten manuell eintragen.";
-  } finally {
-    button.disabled = false;
-  }
+function selectedGameTypes(prefix) {
+  const selected = [...document.querySelectorAll(`[data-game-type-for="${prefix}"]:checked`)]
+    .map((input) => input.value);
+  const manual = $(`${prefix}GameTypeCustom`).value
+    .split(/[,;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return [...new Set([...selected, ...manual])];
 }
 
-const newEntryFields = {
-  receipt: "entryReceipt",
-  gameType: "entryGameType",
-  cost: "entryCost",
-  gewinn: "entryGewinn",
-  drawDates: "entryDrawDates",
-};
+function updateGameTypeSummary(prefix) {
+  const selected = selectedGameTypes(prefix);
+  $(`${prefix}GameTypeSummary`).textContent = selected.length
+    ? selected.join(", ")
+    : "Spielart wählen";
+}
 
-$("queryWin2dayBtn").addEventListener("click", () => {
-  clearTimeout(receiptLookupTimer);
-  queryReceiptData(newEntryFields, $("queryWin2dayBtn"), $("win2dayStatus"));
-});
+function setGameTypes(prefix, storedValue = "") {
+  const inputs = [...document.querySelectorAll(`[data-game-type-for="${prefix}"]`)];
+  inputs.forEach((input) => { input.checked = false; });
 
-$("entryReceipt").addEventListener("input", () => {
-  clearTimeout(receiptLookupTimer);
-  if ($("queryWin2dayBtn").classList.contains("hidden")) return;
-  if ($("entryReceipt").value.replace(/\s+/g, "").length < 6) return;
-  receiptLookupTimer = setTimeout(() => {
-    if (!$("queryWin2dayBtn").classList.contains("hidden")) {
-      queryReceiptData(newEntryFields, $("queryWin2dayBtn"), $("win2dayStatus"));
-    }
-  }, 900);
+  const manual = [];
+  storedValue.split(/\s*\+\s*/).map((item) => item.trim()).filter(Boolean).forEach((item) => {
+    const standard = standardGameTypes.find((value) => value.toLocaleLowerCase("de") === item.toLocaleLowerCase("de"));
+    const input = inputs.find((candidate) => candidate.value === standard);
+    if (input) input.checked = true;
+    else if (item !== "Unbekannt") manual.push(item);
+  });
+
+  $(`${prefix}GameTypeCustom`).value = manual.join(", ");
+  $(`${prefix}GameTypeMenu`).removeAttribute("open");
+  updateGameTypeSummary(prefix);
+}
+
+function gameTypeValue(prefix) {
+  return selectedGameTypes(prefix).join(" + ") || "Unbekannt";
+}
+
+["entry", "editEntry"].forEach((prefix) => {
+  document.querySelectorAll(`[data-game-type-for="${prefix}"]`).forEach((input) => {
+    input.addEventListener("change", () => updateGameTypeSummary(prefix));
+  });
+  $(`${prefix}GameTypeCustom`).addEventListener("input", () => updateGameTypeSummary(prefix));
 });
 
 function setEntryMode(mode) {
   const isManual = mode === "manual";
-  if (isManual) clearTimeout(receiptLookupTimer);
   document.querySelectorAll("[data-entry-mode]").forEach((item) => {
     const selected = item.dataset.entryMode === mode;
     item.classList.toggle("active", selected);
     item.setAttribute("aria-pressed", String(selected));
   });
-  $("queryWin2dayBtn").classList.toggle("hidden", isManual);
   $("entryModeHint").textContent = isManual
     ? "Daten des alten Scheins manuell eintragen. Nur die Quittungsnummer ist verpflichtend."
-    : "Nur die Quittungsnummer ist verpflichtend. Die übrigen Daten werden nach Möglichkeit automatisch ergänzt.";
+    : "Nur die Quittungsnummer ist verpflichtend. Alle weiteren Daten werden manuell eingetragen.";
 }
 
 document.querySelectorAll("[data-entry-mode]").forEach((button) => {
@@ -493,15 +509,15 @@ document.querySelectorAll("[data-entry-mode]").forEach((button) => {
 function openNewEntry() {
   $("newEntryForm").reset();
   $("entryDate").value = todayIso();
-  $("win2dayStatus").textContent = "";
   $("newEntryError").textContent = "";
+  setGameTypes("entry");
   setEntryMode("current");
   show($("newEntryModal"));
   $("entryReceipt").focus();
 }
 
 function closeNewEntry() {
-  clearTimeout(receiptLookupTimer);
+  $("entryGameTypeMenu").removeAttribute("open");
   hide($("newEntryModal"));
 }
 
@@ -519,7 +535,7 @@ $("newEntryForm").addEventListener("submit", async (e) => {
   const payload = {
     entry_date: $("entryDate").value || todayIso(),
     receipt_number: $("entryReceipt").value.trim(),
-    game_type: $("entryGameType").value.trim() || "Unbekannt",
+    game_type: gameTypeValue("entry"),
     draw_dates: drawDates,
     cost: parseFloat($("entryCost").value) || 0,
     gewinn: parseFloat($("entryGewinn").value) || 0,
@@ -534,7 +550,6 @@ $("newEntryForm").addEventListener("submit", async (e) => {
 
   $("newEntryForm").reset();
   $("entryDate").value = todayIso();
-  $("win2dayStatus").textContent = "";
   closeNewEntry();
   await loadEntries();
   await loadOverview();
@@ -545,7 +560,7 @@ function openEditEntry(entry) {
   $("editEntryId").value = entry.id;
   $("editEntryReceipt").value = entry.receipt_number;
   $("editEntryDate").value = entry.entry_date || "";
-  $("editEntryGameType").value = entry.game_type || "";
+  setGameTypes("editEntry", entry.game_type || "");
   $("editEntryCost").value = Number(entry.cost || 0);
   $("editEntryGewinn").value = Number(entry.gewinn || 0);
   $("editEntryDrawDates").value = (entry.draw_dates || []).join(", ");
@@ -555,6 +570,7 @@ function openEditEntry(entry) {
 }
 
 function closeEditEntry() {
+  $("editEntryGameTypeMenu").removeAttribute("open");
   hide($("editEntryModal"));
   $("editEntryForm").reset();
 }
@@ -563,15 +579,6 @@ $("closeEditEntryBtn").addEventListener("click", closeEditEntry);
 $("cancelEditEntryBtn").addEventListener("click", closeEditEntry);
 $("closeEntryDetailsBtn").addEventListener("click", closeEntryDetails);
 $("closeEntryDetailsActionBtn").addEventListener("click", closeEntryDetails);
-$("editQueryWin2dayBtn").addEventListener("click", () => {
-  queryReceiptData({
-    receipt: "editEntryReceipt",
-    gameType: "editEntryGameType",
-    cost: "editEntryCost",
-    gewinn: "editEntryGewinn",
-    drawDates: "editEntryDrawDates",
-  }, $("editQueryWin2dayBtn"), $("editEntryStatus"));
-});
 
 $("editEntryForm").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -582,7 +589,7 @@ $("editEntryForm").addEventListener("submit", async (event) => {
   const payload = {
     entry_date: $("editEntryDate").value || todayIso(),
     receipt_number: $("editEntryReceipt").value.trim(),
-    game_type: $("editEntryGameType").value.trim() || "Unbekannt",
+    game_type: gameTypeValue("editEntry"),
     draw_dates: parseDrawDates($("editEntryDrawDates").value),
     cost: parseFloat($("editEntryCost").value) || 0,
     gewinn: parseFloat($("editEntryGewinn").value) || 0,

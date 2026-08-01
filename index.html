@@ -176,23 +176,30 @@
       <button type="button" class="entry-mode-btn active" data-entry-mode="current" aria-pressed="true">Neuer Schein</button>
       <button type="button" class="entry-mode-btn" data-entry-mode="manual" aria-pressed="false">Alter Schein</button>
     </div>
-    <p id="entryModeHint" class="form-hint">Nur die Quittungsnummer ist verpflichtend. Die übrigen Daten werden nach Möglichkeit automatisch ergänzt.</p>
+    <p id="entryModeHint" class="form-hint">Nur die Quittungsnummer ist verpflichtend. Alle weiteren Daten werden manuell eingetragen.</p>
     <form id="newEntryForm">
       <div class="grid2">
         <label>Datum
           <input type="date" id="entryDate" />
         </label>
         <label>Quittungsnummer
-          <div class="inline-input">
-            <input type="text" id="entryReceipt" placeholder="z.B. 1234567890" required />
-            <button type="button" id="queryWin2dayBtn" class="btn btn-secondary">Daten abrufen</button>
-          </div>
+          <input type="text" id="entryReceipt" placeholder="z.B. 1234567890" required />
         </label>
       </div>
       <div class="grid2">
-        <label>Spielart
-          <input type="text" id="entryGameType" list="gameTypes" placeholder="Wird automatisch erkannt" />
-        </label>
+        <div class="form-field">
+          <span class="field-label">Spielart</span>
+          <details id="entryGameTypeMenu" class="multi-select">
+            <summary><span id="entryGameTypeSummary">Spielart wählen</span><span class="material-symbols-rounded" aria-hidden="true">expand_more</span></summary>
+            <div class="multi-select-menu" role="group" aria-label="Spielarten auswählen">
+              <label class="multi-option"><input type="checkbox" data-game-type-for="entry" value="Lotto" /> Lotto</label>
+              <label class="multi-option"><input type="checkbox" data-game-type-for="entry" value="Joker" /> Joker</label>
+              <label class="multi-option"><input type="checkbox" data-game-type-for="entry" value="Euromillionen" /> Euromillionen</label>
+              <input type="text" id="entryGameTypeCustom" class="manual-game-type" placeholder="Andere Spielart eingeben" aria-label="Andere Spielart manuell eingeben" />
+            </div>
+          </details>
+          <span class="form-hint">Mehrfachauswahl möglich; weitere Spielarten mit Komma trennen.</span>
+        </div>
         <label>Scheinkosten (€)
           <input type="number" min="0" step="0.01" id="entryCost" placeholder="0,00" />
         </label>
@@ -205,7 +212,6 @@
           <input type="number" min="0" step="0.01" id="entryGewinn" placeholder="0,00" />
         </label>
       </div>
-      <p id="win2dayStatus" class="muted" aria-live="polite"></p>
       <p id="newEntryError" class="error" aria-live="polite"></p>
       <div class="modal-actions">
         <button type="button" id="cancelNewEntryBtn" class="btn btn-ghost">Abbrechen</button>
@@ -225,14 +231,23 @@
     <form id="editEntryForm">
       <input type="hidden" id="editEntryId" />
       <label>Quittungsnummer
-        <div class="inline-input">
-          <input type="text" id="editEntryReceipt" required />
-          <button type="button" id="editQueryWin2dayBtn" class="btn btn-secondary">Daten abrufen</button>
-        </div>
+        <input type="text" id="editEntryReceipt" required />
       </label>
       <div class="grid2">
         <label>Datum<input type="date" id="editEntryDate" /></label>
-        <label>Spielart<input type="text" id="editEntryGameType" list="gameTypes" /></label>
+        <div class="form-field">
+          <span class="field-label">Spielart</span>
+          <details id="editEntryGameTypeMenu" class="multi-select">
+            <summary><span id="editEntryGameTypeSummary">Spielart wählen</span><span class="material-symbols-rounded" aria-hidden="true">expand_more</span></summary>
+            <div class="multi-select-menu" role="group" aria-label="Spielarten auswählen">
+              <label class="multi-option"><input type="checkbox" data-game-type-for="editEntry" value="Lotto" /> Lotto</label>
+              <label class="multi-option"><input type="checkbox" data-game-type-for="editEntry" value="Joker" /> Joker</label>
+              <label class="multi-option"><input type="checkbox" data-game-type-for="editEntry" value="Euromillionen" /> Euromillionen</label>
+              <input type="text" id="editEntryGameTypeCustom" class="manual-game-type" placeholder="Andere Spielart eingeben" aria-label="Andere Spielart manuell eingeben" />
+            </div>
+          </details>
+          <span class="form-hint">Mehrfachauswahl möglich; weitere Spielarten mit Komma trennen.</span>
+        </div>
       </div>
       <div class="grid2">
         <label>Scheinkosten (€)<input type="number" min="0" step="0.01" id="editEntryCost" /></label>
@@ -284,17 +299,6 @@
     </div>
   </div>
 </div>
-
-<datalist id="gameTypes">
-  <option value="Lotto 6 aus 45"></option>
-  <option value="EuroMillionen"></option>
-  <option value="Joker"></option>
-  <option value="EuroDreams"></option>
-  <option value="LottoPlus"></option>
-  <option value="Toto"></option>
-  <option value="Bingo"></option>
-  <option value="Zahlenlotto"></option>
-</datalist>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>

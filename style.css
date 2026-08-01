@@ -187,6 +187,9 @@ label {
   font-weight: 700;
 }
 
+.form-field { display: flex; min-width: 0; flex-direction: column; gap: 7px; }
+.field-label { color: var(--text-soft); font-size: 13px; font-weight: 700; }
+
 .inline-input { display: flex; gap: 8px; }
 .inline-input input { min-width: 0; flex: 1; }
 
@@ -211,6 +214,67 @@ input:focus, select:focus {
   background: #0d1620;
   box-shadow: 0 0 0 3px rgba(99, 242, 177, 0.16);
 }
+
+.multi-select { position: relative; }
+.multi-select summary {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  list-style: none;
+  background: var(--surface-input);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.multi-select summary::-webkit-details-marker { display: none; }
+.multi-select summary:hover { border-color: #53657b; }
+.multi-select summary:focus-visible {
+  border-color: var(--primary);
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(99, 242, 177, 0.16);
+}
+.multi-select summary .material-symbols-rounded { transition: transform .15s ease; }
+.multi-select[open] summary .material-symbols-rounded { transform: rotate(180deg); }
+.multi-select-menu {
+  position: absolute;
+  z-index: 8;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-md);
+}
+.multi-option {
+  min-height: 42px;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.multi-option:hover { background: var(--surface-hover); }
+.multi-option input {
+  width: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--primary);
+  box-shadow: none;
+}
+.manual-game-type { margin-top: 3px; }
 
 .error {
   min-height: 18px;
@@ -620,6 +684,8 @@ td.mono, .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nu
   .modal-header h2 { font-size: 20px; }
   .modal-actions { flex-direction: column-reverse; }
   .modal-actions .btn { width: 100%; }
+  .multi-select-menu { position: static; margin-top: 6px; }
+  .multi-option input { width: 18px; min-height: 18px; }
   .details-grid { grid-template-columns: 1fr; }
   .details-grid > div,
   .details-grid > div:nth-child(odd),
