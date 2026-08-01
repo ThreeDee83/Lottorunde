@@ -250,6 +250,27 @@
   </div>
 </div>
 
+<!-- READ-ONLY DETAILS (Admin und User) -->
+<div id="entryDetailsModal" class="modal-overlay hidden">
+  <div class="modal modal-small" role="dialog" aria-modal="true" aria-labelledby="entryDetailsTitle">
+    <div class="modal-header">
+      <h2 id="entryDetailsTitle">Spielschein-Details</h2>
+      <button id="closeEntryDetailsBtn" type="button" class="btn btn-ghost" aria-label="Details schließen">✕</button>
+    </div>
+    <dl class="details-grid">
+      <div><dt>Datum</dt><dd id="detailEntryDate"></dd></div>
+      <div><dt>Quittungsnummer</dt><dd id="detailReceipt" class="mono"></dd></div>
+      <div><dt>Spielart</dt><dd id="detailGameType"></dd></div>
+      <div><dt>Ziehungsdatum</dt><dd id="detailDrawDates"></dd></div>
+      <div><dt>Scheinkosten</dt><dd id="detailCost" class="mono"></dd></div>
+      <div><dt>Gewinn</dt><dd id="detailGewinn" class="mono"></dd></div>
+    </dl>
+    <div class="modal-actions">
+      <button type="button" id="closeEntryDetailsActionBtn" class="btn btn-primary">Schließen</button>
+    </div>
+  </div>
+</div>
+
 <!-- APP-EIGENER DIALOG: zeigt keine Websiteadresse an -->
 <div id="appDialogModal" class="modal-overlay hidden">
   <div class="modal modal-small" role="alertdialog" aria-modal="true" aria-labelledby="appDialogTitle" aria-describedby="appDialogMessage">

@@ -274,7 +274,37 @@ function renderEntries() {
       attachEntrySwipe(tr, e, deleteButton);
     }
 
+    attachEntryDetails(tr, e);
     body.appendChild(tr);
+  });
+}
+
+function isMobileEntryView() {
+  return window.matchMedia("(max-width: 600px) and (orientation: portrait)").matches;
+}
+
+function openEntryDetails(entry) {
+  const draws = (entry.draw_dates || []).map(formatDate).join(", ");
+  $("detailEntryDate").textContent = formatDate(entry.entry_date);
+  $("detailReceipt").textContent = entry.receipt_number || "-";
+  $("detailGameType").textContent = entry.game_type || "-";
+  $("detailDrawDates").textContent = draws || "-";
+  $("detailCost").textContent = fmtMoney(entry.cost);
+  $("detailGewinn").textContent = fmtMoney(entry.gewinn);
+  $("detailGewinn").classList.toggle("amount-positive", Number(entry.gewinn) > 0);
+  show($("entryDetailsModal"));
+  $("closeEntryDetailsBtn").focus();
+}
+
+function closeEntryDetails() {
+  hide($("entryDetailsModal"));
+}
+
+function attachEntryDetails(row, entry) {
+  row.addEventListener("click", (event) => {
+    if (!isMobileEntryView() || event.target.closest("button")) return;
+    if (Date.now() < Number(row.dataset.suppressDetailsUntil || 0)) return;
+    openEntryDetails(entry);
   });
 }
 
@@ -312,6 +342,7 @@ function attachEntrySwipe(row, entry, deleteButton) {
     row.classList.remove("swipe-tracking", "swipe-edit", "swipe-delete");
     row.style.transform = "";
     if (!isHorizontal || Math.abs(deltaX) < 72) return;
+    row.dataset.suppressDetailsUntil = String(Date.now() + 600);
     if (deltaX > 0) openEditEntry(entry);
     else deleteEntry(entry, deleteButton);
   };
@@ -530,6 +561,8 @@ function closeEditEntry() {
 
 $("closeEditEntryBtn").addEventListener("click", closeEditEntry);
 $("cancelEditEntryBtn").addEventListener("click", closeEditEntry);
+$("closeEntryDetailsBtn").addEventListener("click", closeEntryDetails);
+$("closeEntryDetailsActionBtn").addEventListener("click", closeEntryDetails);
 $("editQueryWin2dayBtn").addEventListener("click", () => {
   queryReceiptData({
     receipt: "editEntryReceipt",
@@ -571,11 +604,12 @@ $("editEntryForm").addEventListener("submit", async (event) => {
   await loadOverview();
 });
 
-[$("newEntryModal"), $("editEntryModal"), $("depositModal")].forEach((overlay) => {
+[$("newEntryModal"), $("editEntryModal"), $("depositModal"), $("entryDetailsModal")].forEach((overlay) => {
   overlay.addEventListener("click", (event) => {
     if (event.target !== overlay) return;
     if (overlay === $("newEntryModal")) closeNewEntry();
     else if (overlay === $("editEntryModal")) closeEditEntry();
+    else if (overlay === $("entryDetailsModal")) closeEntryDetails();
     else closeDeposit();
   });
 });
@@ -589,6 +623,7 @@ document.addEventListener("keydown", (event) => {
   if (!$("depositModal").classList.contains("hidden")) closeDeposit();
   if (!$("newEntryModal").classList.contains("hidden")) closeNewEntry();
   if (!$("editEntryModal").classList.contains("hidden")) closeEditEntry();
+  if (!$("entryDetailsModal").classList.contains("hidden")) closeEntryDetails();
 });
 
 // ---------- Settings Modal ----------
