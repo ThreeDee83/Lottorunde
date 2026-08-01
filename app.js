@@ -18,15 +18,17 @@ function hide(el) { el.classList.add("hidden"); }
 
 function formatDate(dateString) {
   if (!dateString) return "-";
-  return new Intl.DateTimeFormat("de-AT").format(new Date(`${dateString}T00:00:00`));
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateString);
+  if (!match) return "-";
+  return `${match[3]}.${match[2]}.${match[1]}`;
 }
 
 function formatDateTime(value) {
   if (!value) return "-";
-  return new Intl.DateTimeFormat("de-AT", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(value));
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  const pad = (number) => String(number).padStart(2, "0");
+  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()}, ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function todayIso() {
@@ -39,7 +41,11 @@ function parseDrawDates(value) {
   return value
     .split(",")
     .map((item) => item.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((item) => {
+      const displayDate = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(item);
+      return displayDate ? `${displayDate[3]}-${displayDate[2]}-${displayDate[1]}` : item;
+    });
 }
 
 function balanceToneClass(value) {
@@ -807,7 +813,7 @@ function openEditEntry(entry) {
   setGameTypes("editEntry", entry.game_type || "");
   $("editEntryCost").value = Number(entry.cost || 0);
   $("editEntryGewinn").value = Number(entry.gewinn || 0);
-  $("editEntryDrawDates").value = (entry.draw_dates || []).join(", ");
+  $("editEntryDrawDates").value = (entry.draw_dates || []).map(formatDate).join(", ");
   $("editEntryStatus").textContent = "Änderungen an Kosten oder Gewinn werden automatisch neu aufgeteilt.";
   show($("editEntryModal"));
   $("editEntryReceipt").focus();
