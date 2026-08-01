@@ -20,6 +20,14 @@ function formatDate(dateString) {
   return new Intl.DateTimeFormat("de-AT").format(new Date(`${dateString}T00:00:00`));
 }
 
+function formatDateTime(value) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("de-AT", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
 function todayIso() {
   const now = new Date();
   const offset = now.getTimezoneOffset();
@@ -148,12 +156,143 @@ async function loadOverview() {
   body.innerHTML = "";
   allProfiles.forEach((p) => {
     const tr = document.createElement("tr");
+    tr.className = "profile-history-card";
+    tr.tabIndex = 0;
+    tr.setAttribute("role", "button");
+    tr.setAttribute("aria-label", `Einzahlungsverlauf von ${p.name} öffnen`);
     tr.innerHTML = `
       <td data-label="Name" class="profile-card-name">${p.name}</td>
       <td data-label="Kontostand" class="mono profile-card-balance ${balanceToneClass(p.balance)}">${fmtMoney(p.balance)}</td>
     `;
+    tr.addEventListener("click", () => openPlayerDeposits(p));
+    tr.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      openPlayerDeposits(p);
+    });
     body.appendChild(tr);
   });
+}
+
+function appendTableRow(body, cells, rowClass = "") {
+  const tr = document.createElement("tr");
+  if (rowClass) tr.className = rowClass;
+  cells.forEach(({ label, text, className = "" }) => {
+    const td = document.createElement("td");
+    td.dataset.label = label;
+    if (className) td.className = className;
+    td.textContent = text;
+    tr.appendChild(td);
+  });
+  body.appendChild(tr);
+}
+
+function renderHistoryEmpty(body, colSpan, message) {
+  const tr = document.createElement("tr");
+  tr.className = "empty-row";
+  const td = document.createElement("td");
+  td.colSpan = colSpan;
+  td.textContent = message;
+  tr.appendChild(td);
+  body.appendChild(tr);
+}
+
+async function openPlayerDeposits(profile) {
+  if (currentProfile?.role !== "admin") return;
+  $("playerDepositsTitle").textContent = `Einzahlungen – ${profile.name}`;
+  $("playerDepositsTotal").textContent = fmtMoney(0);
+  $("playerDepositsStatus").textContent = "Einzahlungen werden geladen …";
+  $("playerDepositsBody").innerHTML = "";
+  show($("playerDepositsModal"));
+  $("closePlayerDepositsBtn").focus();
+
+  const { data, error } = await supabaseClient
+    .from("transactions")
+    .select("amount, note, created_at")
+    .eq("profile_id", profile.id)
+    .eq("type", "deposit")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    $("playerDepositsStatus").textContent = "Einzahlungsverlauf konnte nicht geladen werden.";
+    renderHistoryEmpty($("playerDepositsBody"), 3, "Keine Daten verfügbar.");
+    return;
+  }
+
+  const deposits = data || [];
+  const total = deposits.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  $("playerDepositsTotal").textContent = fmtMoney(total);
+  $("playerDepositsStatus").textContent = `${deposits.length} ${deposits.length === 1 ? "Einzahlung" : "Einzahlungen"}`;
+
+  if (!deposits.length) {
+    renderHistoryEmpty($("playerDepositsBody"), 3, "Für diesen Spieler sind noch keine Einzahlungen vorhanden.");
+    return;
+  }
+
+  deposits.forEach((deposit) => {
+    appendTableRow($("playerDepositsBody"), [
+      { label: "Datum", text: formatDateTime(deposit.created_at) },
+      { label: "Betrag", text: fmtMoney(deposit.amount), className: "mono transaction-deposit" },
+      { label: "Beschreibung", text: deposit.note || "Einzahlung" },
+    ], "transaction-row transaction-row-deposit");
+  });
+}
+
+function closePlayerDeposits() {
+  hide($("playerDepositsModal"));
+}
+
+function transactionTypeMeta(type) {
+  const types = {
+    deposit: { label: "Einzahlung", className: "transaction-deposit", rowClass: "transaction-row-deposit" },
+    win_share: { label: "Gewinn", className: "transaction-win", rowClass: "transaction-row-win" },
+    stake_share: { label: "Scheinkosten", className: "transaction-stake", rowClass: "transaction-row-stake" },
+    correction: { label: "Korrektur", className: "transaction-correction", rowClass: "transaction-row-correction" },
+  };
+  return types[type] || { label: type, className: "", rowClass: "" };
+}
+
+async function openTransactionsLog() {
+  if (currentProfile?.role !== "admin") return;
+  $("transactionsLogStatus").textContent = "Transaktionen werden geladen …";
+  $("transactionsLogBody").innerHTML = "";
+  show($("transactionsLogModal"));
+  $("closeTransactionsLogBtn").focus();
+
+  const { data, error } = await supabaseClient
+    .from("transactions")
+    .select("profile_id, amount, type, note, created_at")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    $("transactionsLogStatus").textContent = "Transaktionslog konnte nicht geladen werden.";
+    renderHistoryEmpty($("transactionsLogBody"), 5, "Keine Daten verfügbar.");
+    return;
+  }
+
+  const transactions = data || [];
+  const profileNames = new Map(allProfiles.map((profile) => [profile.id, profile.name]));
+  $("transactionsLogStatus").textContent = `${transactions.length} ${transactions.length === 1 ? "Transaktion" : "Transaktionen"}`;
+
+  if (!transactions.length) {
+    renderHistoryEmpty($("transactionsLogBody"), 5, "Es sind noch keine Transaktionen vorhanden.");
+    return;
+  }
+
+  transactions.forEach((transaction) => {
+    const meta = transactionTypeMeta(transaction.type);
+    appendTableRow($("transactionsLogBody"), [
+      { label: "Datum", text: formatDateTime(transaction.created_at) },
+      { label: "Spieler", text: profileNames.get(transaction.profile_id) || "Unbekannter Spieler" },
+      { label: "Art", text: meta.label, className: `transaction-badge ${meta.className}` },
+      { label: "Betrag", text: fmtMoney(transaction.amount), className: `mono ${meta.className}` },
+      { label: "Beschreibung", text: transaction.note || "-" },
+    ], `transaction-row ${meta.rowClass}`);
+  });
+}
+
+function closeTransactionsLog() {
+  hide($("transactionsLogModal"));
 }
 
 function populateDepositPlayers() {
@@ -256,7 +395,7 @@ function renderEntries() {
     const tr = document.createElement("tr");
     tr.className = "empty-row";
     const td = document.createElement("td");
-    td.colSpan = currentProfile.role === "admin" ? 7 : 6;
+    td.colSpan = currentProfile.role === "admin" ? 6 : 5;
     td.textContent = "Für diesen Zeitraum sind keine Spielscheine vorhanden.";
     tr.appendChild(td);
     body.appendChild(tr);
@@ -267,7 +406,6 @@ function renderEntries() {
     const tr = document.createElement("tr");
     const draws = (e.draw_dates || []).map(formatDate).join(", ");
     tr.innerHTML = `
-      <td data-label="Datum">${formatDate(e.entry_date)}</td>
       <td data-label="Quittungsnr." class="mono">${e.receipt_number}</td>
       <td data-label="Spielart">${e.game_type}</td>
       <td data-label="Ziehungsdatum">${draws || "-"}</td>
@@ -307,7 +445,6 @@ function isMobileEntryView() {
 
 function openEntryDetails(entry) {
   const draws = (entry.draw_dates || []).map(formatDate).join(", ");
-  $("detailEntryDate").textContent = formatDate(entry.entry_date);
   $("detailReceipt").textContent = entry.receipt_number || "-";
   $("detailGameType").textContent = entry.game_type || "-";
   $("detailDrawDates").textContent = draws || "-";
@@ -611,12 +748,20 @@ $("editEntryForm").addEventListener("submit", async (event) => {
   await loadOverview();
 });
 
-[$("newEntryModal"), $("editEntryModal"), $("depositModal"), $("entryDetailsModal")].forEach((overlay) => {
+$("closePlayerDepositsBtn").addEventListener("click", closePlayerDeposits);
+$("closePlayerDepositsActionBtn").addEventListener("click", closePlayerDeposits);
+$("openTransactionsLogBtn").addEventListener("click", openTransactionsLog);
+$("closeTransactionsLogBtn").addEventListener("click", closeTransactionsLog);
+$("closeTransactionsLogActionBtn").addEventListener("click", closeTransactionsLog);
+
+[$("newEntryModal"), $("editEntryModal"), $("depositModal"), $("entryDetailsModal"), $("playerDepositsModal"), $("transactionsLogModal")].forEach((overlay) => {
   overlay.addEventListener("click", (event) => {
     if (event.target !== overlay) return;
     if (overlay === $("newEntryModal")) closeNewEntry();
     else if (overlay === $("editEntryModal")) closeEditEntry();
     else if (overlay === $("entryDetailsModal")) closeEntryDetails();
+    else if (overlay === $("playerDepositsModal")) closePlayerDeposits();
+    else if (overlay === $("transactionsLogModal")) closeTransactionsLog();
     else closeDeposit();
   });
 });
@@ -631,6 +776,8 @@ document.addEventListener("keydown", (event) => {
   if (!$("newEntryModal").classList.contains("hidden")) closeNewEntry();
   if (!$("editEntryModal").classList.contains("hidden")) closeEditEntry();
   if (!$("entryDetailsModal").classList.contains("hidden")) closeEntryDetails();
+  if (!$("playerDepositsModal").classList.contains("hidden")) closePlayerDeposits();
+  if (!$("transactionsLogModal").classList.contains("hidden")) closeTransactionsLog();
 });
 
 // ---------- Settings Modal ----------

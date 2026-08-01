@@ -107,7 +107,7 @@
         <table class="entries-table">
           <thead>
             <tr>
-              <th>Datum</th><th>Quittungsnr.</th><th>Spielart</th><th>Ziehungsdatum</th><th>Kosten</th><th>Gewinn</th><th id="entriesActionsHeader" class="hidden"><span class="sr-only">Aktionen</span></th>
+              <th>Quittungsnr.</th><th>Spielart</th><th>Ziehungsdatum</th><th>Kosten</th><th>Gewinn</th><th id="entriesActionsHeader" class="hidden"><span class="sr-only">Aktionen</span></th>
             </tr>
           </thead>
           <tbody id="entriesTableBody"></tbody>
@@ -132,12 +132,62 @@
       Kontostand verwalten sowie Spieler aktivieren oder deaktivieren.
       Deaktivierte Spieler können sich nicht mehr anmelden bzw. sehen keine Daten mehr.
     </p>
+    <div class="settings-actions">
+      <button type="button" id="openTransactionsLogBtn" class="btn btn-secondary">
+        <span class="material-symbols-rounded" aria-hidden="true">receipt_long</span>
+        Transaktionslog
+      </button>
+    </div>
     <h3>Spieler &amp; Rollen</h3>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Name</th><th>Rolle</th><th>Kontostand korrigieren</th><th>Status</th></tr></thead>
         <tbody id="settingsPlayersBody"></tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+<!-- EINZAHLUNGSVERLAUF EINES SPIELERS (nur Admin) -->
+<div id="playerDepositsModal" class="modal-overlay hidden">
+  <div class="modal modal-compact" role="dialog" aria-modal="true" aria-labelledby="playerDepositsTitle">
+    <div class="modal-header">
+      <h2 id="playerDepositsTitle">Einzahlungsverlauf</h2>
+      <button id="closePlayerDepositsBtn" type="button" class="btn btn-ghost" aria-label="Einzahlungsverlauf schließen">✕</button>
+    </div>
+    <div class="history-summary">
+      <span>Summe aller Einzahlungen</span>
+      <strong id="playerDepositsTotal" class="mono transaction-deposit">0,00 €</strong>
+    </div>
+    <p id="playerDepositsStatus" class="muted" aria-live="polite"></p>
+    <div class="table-wrap history-table-wrap">
+      <table class="history-table">
+        <thead><tr><th>Datum</th><th>Betrag</th><th>Beschreibung</th></tr></thead>
+        <tbody id="playerDepositsBody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button id="closePlayerDepositsActionBtn" type="button" class="btn btn-primary">Schließen</button>
+    </div>
+  </div>
+</div>
+
+<!-- TRANSAKTIONSLOG (nur Admin) -->
+<div id="transactionsLogModal" class="modal-overlay hidden">
+  <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="transactionsLogTitle">
+    <div class="modal-header">
+      <h2 id="transactionsLogTitle">Transaktionslog</h2>
+      <button id="closeTransactionsLogBtn" type="button" class="btn btn-ghost" aria-label="Transaktionslog schließen">✕</button>
+    </div>
+    <p id="transactionsLogStatus" class="muted" aria-live="polite"></p>
+    <div class="table-wrap history-table-wrap">
+      <table class="history-table transaction-log-table">
+        <thead><tr><th>Datum</th><th>Spieler</th><th>Art</th><th>Betrag</th><th>Beschreibung</th></tr></thead>
+        <tbody id="transactionsLogBody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button id="closeTransactionsLogActionBtn" type="button" class="btn btn-primary">Schließen</button>
     </div>
   </div>
 </div>
@@ -273,7 +323,6 @@
       <button id="closeEntryDetailsBtn" type="button" class="btn btn-ghost" aria-label="Details schließen">✕</button>
     </div>
     <dl class="details-grid">
-      <div><dt>Datum</dt><dd id="detailEntryDate"></dd></div>
       <div><dt>Quittungsnummer</dt><dd id="detailReceipt" class="mono"></dd></div>
       <div><dt>Spielart</dt><dd id="detailGameType"></dd></div>
       <div><dt>Ziehungsdatum</dt><dd id="detailDrawDates"></dd></div>
