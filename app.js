@@ -6,6 +6,10 @@ let allProfiles = [];
 let activeEntryFilter = "month";
 let appDialogResolver = null;
 let pendingTransactionDelete = null;
+let currentDepositHistoryProfile = null;
+let realtimeChannel = null;
+let realtimeRefreshTimer = null;
+const realtimePendingTables = new Set();
 
 // ---------- Helpers ----------
 const fmtMoney = (n) =>
@@ -100,6 +104,7 @@ $("loginForm").addEventListener("submit", async (e) => {
 });
 
 $("logoutBtn").addEventListener("click", async () => {
+  if (realtimeChannel) await supabaseClient.removeChannel(realtimeChannel);
   await supabaseClient.auth.signOut();
   location.reload();
 });
@@ -144,7 +149,78 @@ async function bootstrapApp() {
   }
 
   await loadEntries();
+  startRealtimeUpdates();
 }
+
+async function refreshCurrentUserProfile() {
+  const { data: profile } = await supabaseClient
+    .from("profiles")
+    .select("name, role, balance, active")
+    .eq("id", currentProfile.id)
+    .single();
+  if (!profile) return false;
+  if (!profile.active) {
+    await supabaseClient.auth.signOut();
+    location.reload();
+    return false;
+  }
+  if (profile.role !== currentProfile.role) {
+    location.reload();
+    return false;
+  }
+  currentProfile.name = profile.name;
+  currentProfile.balance = profile.balance;
+  $("whoami").textContent = `${profile.name} (${profile.role === "admin" ? "Admin" : "User"})`;
+  if (profile.role !== "admin") setBalanceDisplay($("userBalanceAmount"), profile.balance);
+  return true;
+}
+
+function queueRealtimeRefresh(table) {
+  realtimePendingTables.add(table);
+  clearTimeout(realtimeRefreshTimer);
+  realtimeRefreshTimer = setTimeout(async () => {
+    const changed = new Set(realtimePendingTables);
+    realtimePendingTables.clear();
+
+    if (changed.has("entries")) await loadEntries();
+    if (changed.has("profiles")) {
+      const sessionIsCurrent = await refreshCurrentUserProfile();
+      if (!sessionIsCurrent) return;
+      if (currentProfile.role === "admin") await loadOverview();
+      if (!$("settingsModal").classList.contains("hidden")) await loadSettingsPlayers();
+    }
+    if (changed.has("transactions")) {
+      if (currentDepositHistoryProfile && !$("playerDepositsModal").classList.contains("hidden")) {
+        await openPlayerDeposits(currentDepositHistoryProfile, false);
+      }
+      if (!$("transactionsLogModal").classList.contains("hidden")) {
+        await openTransactionsLog(false);
+      }
+    }
+  }, 180);
+}
+
+function startRealtimeUpdates() {
+  if (realtimeChannel) supabaseClient.removeChannel(realtimeChannel);
+  realtimeChannel = supabaseClient
+    .channel(`lottorunde-live-${currentProfile.id}`)
+    .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => queueRealtimeRefresh("profiles"))
+    .on("postgres_changes", { event: "*", schema: "public", table: "entries" }, () => queueRealtimeRefresh("entries"))
+    .on("postgres_changes", { event: "*", schema: "public", table: "transactions" }, () => queueRealtimeRefresh("transactions"))
+    .subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        queueRealtimeRefresh("profiles");
+        queueRealtimeRefresh("entries");
+      }
+    });
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden || !currentProfile) return;
+  queueRealtimeRefresh("profiles");
+  queueRealtimeRefresh("entries");
+  queueRealtimeRefresh("transactions");
+});
 
 // ---------- Admin: Kontostand-Übersicht ----------
 async function loadOverview() {
@@ -205,14 +281,15 @@ function renderHistoryEmpty(body, colSpan, message) {
   body.appendChild(tr);
 }
 
-async function openPlayerDeposits(profile) {
+async function openPlayerDeposits(profile, focusDialog = true) {
   if (currentProfile?.role !== "admin") return;
+  currentDepositHistoryProfile = profile;
   $("playerDepositsTitle").textContent = `Einzahlungen – ${profile.name}`;
   $("playerDepositsTotal").textContent = fmtMoney(0);
   $("playerDepositsStatus").textContent = "Einzahlungen werden geladen …";
   $("playerDepositsBody").innerHTML = "";
   show($("playerDepositsModal"));
-  $("closePlayerDepositsBtn").focus();
+  if (focusDialog) $("closePlayerDepositsBtn").focus();
 
   const { data, error } = await supabaseClient
     .from("transactions")
@@ -254,6 +331,7 @@ async function openPlayerDeposits(profile) {
 
 function closePlayerDeposits() {
   hide($("playerDepositsModal"));
+  currentDepositHistoryProfile = null;
 }
 
 function transactionTypeMeta(type) {
@@ -266,12 +344,12 @@ function transactionTypeMeta(type) {
   return types[type] || { label: type, className: "", rowClass: "" };
 }
 
-async function openTransactionsLog() {
+async function openTransactionsLog(focusDialog = true) {
   if (currentProfile?.role !== "admin") return;
   $("transactionsLogStatus").textContent = "Transaktionen werden geladen …";
   $("transactionsLogBody").innerHTML = "";
   show($("transactionsLogModal"));
-  $("closeTransactionsLogBtn").focus();
+  if (focusDialog) $("closeTransactionsLogBtn").focus();
 
   const { data, error } = await supabaseClient
     .from("transactions")
